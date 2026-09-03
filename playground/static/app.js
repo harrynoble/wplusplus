@@ -464,6 +464,7 @@
       return;
     }
     if (record.event === 'input') {
+      flushQueued();          // the prompt must be on screen under the caret
       showCaret(current);
       return;
     }
@@ -471,6 +472,7 @@
       return;
     }
 
+    flushQueued();            // never lose the last chunk behind the result
     current.settled = true;
     if (current.stream) current.stream.close();
     removeCaret();
@@ -531,6 +533,7 @@
   /* ----------------------------------------------- the output as a terminal */
 
   function beginOutput() {
+    resetQueue();
     el.output.textContent = '';
     stream.pre = document.createElement('pre');
     stream.pre.className = 'output-stream';
@@ -539,25 +542,81 @@
     el.output.appendChild(stream.pre);
   }
 
-  /* Text is appended to a trailing text node, which leaves the caret element
-     and any earlier styled runs exactly where they are. */
+  /* Output is applied once per animation frame rather than once per record.
+     A program printing flat out used to touch the DOM - and read scrollHeight,
+     forcing a synchronous layout - on every single record, which locked the
+     tab up hard enough that the page had to be reloaded. */
+  var queued = [];
+  var frame = null;
+
   function appendText(text, cls) {
     if (!text || !stream.pre) return;
+    queued.push({ text: text, cls: cls });
+    if (frame === null) {
+      frame = requestAnimationFrame(drainQueued);
+    }
+  }
 
+  function drainQueued() {
+    frame = null;
+    if (!stream.pre || !queued.length) {
+      queued = [];
+      return;
+    }
+
+    var batch = queued;
+    queued = [];
+
+    // The caret must stay last, so detach it while we write and put it back.
+    var caret = stream.caret;
+    if (caret && caret.parentNode === stream.pre) {
+      stream.pre.removeChild(caret);
+      stream.node = null;
+    }
+
+    for (var i = 0; i < batch.length; i++) {
+      writeChunk(batch[i].text, batch[i].cls);
+    }
+
+    if (caret) {
+      stream.pre.appendChild(caret);
+      stream.node = null;
+    }
+    scrollOutput();
+  }
+
+  /* Appends to a trailing text node, which leaves earlier styled runs alone. */
+  function writeChunk(text, cls) {
     if (cls) {
       var span = document.createElement('span');
       span.className = cls;
       span.textContent = text;
       stream.pre.appendChild(span);
       stream.node = null;
-    } else {
-      if (!stream.node) {
-        stream.node = document.createTextNode('');
-        stream.pre.appendChild(stream.node);
-      }
-      stream.node.appendData(text);
+      return;
     }
-    scrollOutput();
+    if (!stream.node) {
+      stream.node = document.createTextNode('');
+      stream.pre.appendChild(stream.node);
+    }
+    stream.node.appendData(text);
+  }
+
+  function resetQueue() {
+    if (frame !== null) {
+      cancelAnimationFrame(frame);
+      frame = null;
+    }
+    queued = [];
+  }
+
+  /* Ordering matters more than batching when a prompt or a result arrives. */
+  function flushQueued() {
+    if (frame !== null) {
+      cancelAnimationFrame(frame);
+      frame = null;
+    }
+    drainQueued();
   }
 
   function hasOutput() {
@@ -656,6 +715,7 @@
   }
 
   function renderDisconnected() {
+    resetQueue();
     el.output.textContent = '';
     stream.pre = null;
     stream.node = null;
@@ -679,6 +739,7 @@
 
   function clearOutput() {
     stopSession();
+    resetQueue();
     el.output.textContent = '';
     stream.pre = null;
     stream.node = null;

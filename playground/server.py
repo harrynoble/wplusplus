@@ -55,6 +55,13 @@ MAX_SOURCE_BYTES = 200_000
 MAX_INPUT_BYTES = 10_000
 MAX_OUTPUT_BYTES = 1_000_000
 MAX_LIVE_SESSIONS = 8
+
+# A program printing flat out produces one record per line, which is far more
+# events than any browser wants.  Output is coalesced into chunks before it is
+# put on the stream: at most one every FLUSH_INTERVAL, or sooner once a chunk
+# reaches CHUNK_BYTES.
+OUTPUT_FLUSH_INTERVAL = 0.04
+OUTPUT_CHUNK_BYTES = 32_768
 SESSION_RETENTION_SECONDS = 120  # keep a finished session around to be drained
 
 # Which examples appear in the Examples menu, in order.
@@ -106,6 +113,10 @@ class Session:
         self.output_bytes = 0
         self._result_sent = False
         self._pending = None  # outcome claimed by a stop or a timeout
+
+        self._chunks = []      # output waiting to be coalesced
+        self._chunk_bytes = 0
+        self._last_flush = 0.0
 
     # -- lifecycle
 
@@ -165,7 +176,7 @@ class Session:
             with self._lock:
                 self.output_bytes += len(text.encode("utf-8", "replace"))
                 over_limit = self.output_bytes > MAX_OUTPUT_BYTES
-            self._emit(record)
+            self._buffer_output(event, text)
             if over_limit:
                 self._stop_with(
                     exit_code=1,
@@ -190,6 +201,8 @@ class Session:
                     self.resumed_at = None
                 self.waiting = True
                 self.waiting_since = time.monotonic()
+            # Anything already printed must be on screen before the caret.
+            self._flush_output()
             self._emit(record)
             return
 
@@ -197,11 +210,48 @@ class Session:
             self._finish(record)
             return
 
+        self._flush_output()
         self._emit(record)
+
+    def _buffer_output(self, event, text):
+        """Hold output briefly so it reaches the browser in chunks."""
+        if not text:
+            return
+        with self._lock:
+            # Merge into the previous chunk while it is the same stream, so a
+            # thousand printed lines become one record rather than a thousand.
+            if self._chunks and self._chunks[-1]["event"] == event:
+                self._chunks[-1]["text"] += text
+            else:
+                self._chunks.append({"event": event, "text": text})
+            self._chunk_bytes += len(text)
+            now = time.monotonic()
+            due = (
+                self._chunk_bytes >= OUTPUT_CHUNK_BYTES
+                or now - self._last_flush >= OUTPUT_FLUSH_INTERVAL
+            )
+        if due:
+            self._flush_output()
+
+    def _flush_output(self):
+        """Put whatever output is buffered onto the event stream."""
+        with self._lock:
+            chunks = self._chunks
+            if not chunks:
+                self._last_flush = time.monotonic()
+                return
+            self._chunks = []
+            self._chunk_bytes = 0
+            self._last_flush = time.monotonic()
+        for chunk in chunks:
+            self.events.put(chunk)
 
     def _watchdog(self):
         """Enforce the compute budget, and evict programs waiting forever."""
         while not self.finished.wait(0.2):
+            # Release any trailing chunk that has not reached the size trigger.
+            self._flush_output()
+
             now = time.monotonic()
             with self._lock:
                 if self.waiting:
@@ -321,6 +371,7 @@ class Session:
         # type: a program the user answered after a minute still ran for 12 ms.
         record["durationMs"] = int(self._compute_time() * 1000)
 
+        self._flush_output()  # nothing printed may be lost behind the result
         self._emit(record)
         self.events.put(None)  # sentinel: the stream is over
         self.finished_at = time.monotonic()

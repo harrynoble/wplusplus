@@ -23,6 +23,7 @@ import json
 import os
 import sys
 import threading
+import time
 
 # The repository root, so `wpplang` imports without installation.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -48,15 +49,22 @@ class Channel:
 class ProxyStream(io.TextIOBase):
     """Stands in for sys.stdout / sys.stderr and forwards writes as records.
 
-    Writes are gathered until a newline shows up, which keeps one `yap` call
-    from turning into half a dozen records, and are flushed explicitly before
-    an input prompt so the caret always lands after the prompt text.
+    Writes are gathered so one `yap` call does not turn into half a dozen
+    records, and the buffer is released on three triggers: a newline, a full
+    buffer, and a ticker (see `start_ticker`).  The ticker is what matters for
+    output that never contains a newline - `sys.stdout.write("x")` in a loop
+    would otherwise sit in this buffer forever and the user would watch a
+    program run and print nothing at all.
     """
+
+    FLUSH_BYTES = 4096
 
     def __init__(self, channel, event):
         self._channel = channel
         self._event = event
         self._parts = []
+        self._size = 0
+        self._lock = threading.Lock()
 
     def writable(self):
         return True
@@ -67,18 +75,41 @@ class ProxyStream(io.TextIOBase):
     def write(self, text):
         if not isinstance(text, str):
             text = str(text)
-        if text:
+        if not text:
+            return 0
+        with self._lock:
             self._parts.append(text)
-            if "\n" in text:
-                self.flush()
+            self._size += len(text)
+            due = "\n" in text or self._size >= self.FLUSH_BYTES
+        if due:
+            self.flush()
         return len(text)
 
     def flush(self):
-        if not self._parts:
-            return
-        text = "".join(self._parts)
-        del self._parts[:]
+        # The channel send happens outside the lock: a writer in another thread
+        # should never wait on the socket.
+        with self._lock:
+            if not self._parts:
+                return
+            text = "".join(self._parts)
+            del self._parts[:]
+            self._size = 0
         self._channel.send({"event": self._event, "text": text})
+
+
+def start_ticker(streams, interval=0.05):
+    """Flush the proxies periodically so partial lines still reach the screen."""
+
+    def tick():
+        while True:
+            time.sleep(interval)
+            for stream in streams:
+                try:
+                    stream.flush()
+                except Exception:  # noqa: BLE001 - the run is ending anyway
+                    return
+
+    threading.Thread(target=tick, daemon=True).start()
 
 
 def make_input(channel, out, stdin):
@@ -112,6 +143,7 @@ def main():
 
     sys.stdout = out
     sys.stderr = err
+    start_ticker((out, err))
 
     try:
         with open(source_path, "r", encoding="utf-8") as handle:

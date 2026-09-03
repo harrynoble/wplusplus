@@ -122,6 +122,21 @@ class CommandLineTests(unittest.TestCase):
         self.assertIn("bodycount", done.stdout)
         self.assertIn("len", done.stdout)
 
+    def test_emit_reports_a_refused_program_as_a_skill_issue(self):
+        # Translation can reject a program; --emit must not leak a traceback.
+        path = os.path.join(ROOT, "tests", "_reserved.wpp")
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write("cook dip(self):\n    spill 1\n")
+        try:
+            done = wpp("--emit", path)
+            self.assertEqual(done.returncode, 1)
+            self.assertNotIn("Traceback", done.stderr)
+            self.assertIn("Bro forgot how to type", done.stderr)
+            self.assertIn("'dip' is a W++ keyword", done.stderr)
+            self.assertEqual(done.stdout, "")
+        finally:
+            os.remove(path)
+
     def test_missing_file_is_a_usage_error(self):
         done = wpp("does_not_exist.wpp")
         self.assertEqual(done.returncode, 2)

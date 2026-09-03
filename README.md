@@ -112,6 +112,10 @@ sitting at a prompt does not count, so you can take as long as you like to
 answer while a runaway `grind` loop is still stopped after ten seconds. The
 reported duration is compute time for the same reason.
 
+A program that prints without stopping is capped at 1 MB of output, and its
+output is coalesced into chunks rather than sent line by line, so a runaway
+`grind` loop cannot lock the page up.
+
 The editor is Monaco when it can be reached, and a small built-in editor
 otherwise, so the playground still works offline.
 
@@ -226,9 +230,15 @@ python -m unittest discover -s tests -t .
 
 Covers every keyword translation, word-boundary and string-literal safety,
 expressions, functions, conditionals, loops, collections, I/O, exit codes, every
-Skill Issue message, the official spec examples run end to end, and the
-playground API - interactive `dm()` prompts, several prompts in a row, prompts
-inside a loop, the compute budget, Stop, and child-process cleanup.
+Skill Issue message, and the official spec examples run end to end.
+
+`tests/test_programs.py` holds whole programs with exact expected output -
+ternaries, comprehensions, loop-else, generators, classes, decorators,
+f-strings, quicksort, a sieve, BFS, matrix multiplication - plus the diagnostics
+for errors raised inside comprehensions, generators, methods and decorated
+functions. `tests/test_playground.py` covers the API: interactive prompts,
+several in a row, prompts inside a loop, the compute budget, Stop,
+runaway-output handling, and child-process cleanup.
 
 ## Project layout
 
@@ -249,10 +259,23 @@ To add a keyword, add one line to `wpplang/keywords.py`. Everything else follows
 
 ## Current limitations
 
-- **W++ keywords are reserved words.** You cannot use one as an identifier or a
-  keyword-argument name: `tea(cap=1)` translates to `dict(False=1)` and fails, the
-  same way `dict(if=1)` fails in Python. Names that merely *contain* a keyword
-  (`cookie`, `cap_rate`, `bet_size`) are fine.
+- **W++ keywords are reserved words**, everywhere. You cannot name a function,
+  class, method, parameter or keyword argument after one, for the same reason
+  Python will not let you write `def break()`: `cook dip(self)` would become
+  `def break(self)`, and a call written `dip()` would become `break()` anyway.
+  Definitions get a clear error saying which word is the problem:
+
+  ```
+  $ python wpp.py stack.wpp
+  🚨 Negative Aura: Bro forgot how to type (SyntaxError)
+     where: stack.wpp, line 2
+        2 | cook dip(self):
+     details: 'dip' is a W++ keyword (it becomes Python's 'break'), so it cannot be used as a name
+  ```
+
+  Names that merely *contain* a keyword (`cookie`, `cap_rate`, `bet_size`) are
+  fine, and so are attributes: `self.cap = 10` and `stack.dip()` both work,
+  because a name after a dot is never a keyword.
 - **Python keywords are not aliased.** `and`, `or`, `not`, `in`, `is`, `import`,
   `class`, `try`/`except`, `lambda` and friends are written the Python way; the spec
   only defines the 19 words above.

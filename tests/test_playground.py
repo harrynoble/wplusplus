@@ -276,6 +276,70 @@ class InteractiveInputTests(ApiTestCase):
         self.assertIsNone(result["error"])
 
 
+class RunawayOutputTests(ApiTestCase):
+    """A loop that prints must stay watchable, and one that prints without a
+    newline must not look like a program producing nothing at all."""
+
+    def test_output_without_a_newline_still_arrives(self):
+        # The worker buffers writes; without a periodic flush a program that
+        # never prints a newline showed no output whatsoever, and the buffer
+        # died with the process when the timeout killed it.
+        output, _, _ = self.drive(
+            "import sys\n"
+            "sys.stdout.write('partial line')\n"
+            "grind nocap:\n"
+            "    x = 1",
+            timeout=1,
+        )
+        self.assertIn("partial line", output)
+
+    def test_a_flooding_loop_is_delivered_in_few_events(self):
+        # One record per printed line meant ~200k browser events per megabyte,
+        # which froze the tab. Output is coalesced into chunks instead.
+        output, _, events = self.drive(
+            'grind nocap:\n    yap("spam")', timeout=1
+        )
+        chunks = [event for event in events if event["event"] == "stdout"]
+        self.assertGreater(len(output), 100_000, "expected the loop to flood")
+        self.assertLess(len(chunks), 400, "too many events for the output size")
+
+    def test_a_flooding_loop_still_respects_the_budget(self):
+        started = time.monotonic()
+        _, result, _ = self.drive('grind nocap:\n    yap("spam")', timeout=1)
+        elapsed = time.monotonic() - started
+        self.assertIsNotNone(result)
+        # Delivering the backlog used to take many times the budget.
+        self.assertLess(elapsed, 10, "took %.1fs for a 1s budget" % elapsed)
+
+    def test_output_limit_ends_a_flood(self):
+        _, result, _ = self.drive(
+            "import sys\ngrind nocap:\n    sys.stdout.write('x')", timeout=8
+        )
+        # Either guard may win the race; both must end the run cleanly.
+        self.assertIn(
+            result["error"]["message"],
+            (
+                "Output limit reached",
+                "Go touch grass, you've been looping forever (KeyboardInterrupt)",
+            ),
+        )
+
+    def test_the_playground_still_works_after_a_flood(self):
+        # "Nothing works after that, you have to reload."
+        self.drive('grind nocap:\n    yap("spam")', timeout=1)
+        output, result, _ = self.drive('yap("still alive")')
+        self.assertEqual(output.strip(), "still alive")
+        self.assertIsNone(result["error"])
+
+    def test_interactive_input_still_works_after_a_flood(self):
+        self.drive('grind nocap:\n    yap("spam")', timeout=1)
+        output, result, _ = self.drive(
+            'name = dm("who? ")\nyap("hi", name)', ["Claude"]
+        )
+        self.assertEqual(output, "who? hi Claude\n")
+        self.assertIsNone(result["error"])
+
+
 class GuardTests(ApiTestCase):
     def test_runaway_loop_is_stopped(self):
         started = time.monotonic()

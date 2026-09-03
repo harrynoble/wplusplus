@@ -10,7 +10,7 @@ import argparse
 import os
 import sys
 
-from wpplang import CATEGORIES, KEYWORDS, __version__, translate_file
+from wpplang import CATEGORIES, KEYWORDS, __version__, format_skill_issue, translate
 from wpplang.runner import EXIT_SKILL_ISSUE, run_file
 
 EXIT_USAGE = 2
@@ -54,13 +54,26 @@ def main(argv=None):
         return EXIT_USAGE
 
     if args.emit:
-        sys.stdout.write(translate_file(args.source))
-        return 0
+        return emit(args.source)
 
     result = run_file(args.source)
     if result.error_report is not None:
         print(result.error_report, file=sys.stderr)
     return result.exit_code
+
+
+def emit(path):
+    """Print the generated Python, reporting a bad program the usual way."""
+    with open(path, "r", encoding="utf-8") as handle:
+        source = handle.read()
+    try:
+        sys.stdout.write(translate(source))
+    except (SyntaxError, ValueError) as exc:
+        # Translation can refuse a program outright - a keyword used where only
+        # a name can go - and that deserves a skill issue, not a traceback.
+        print(format_skill_issue(exc, path, source.splitlines()), file=sys.stderr)
+        return EXIT_SKILL_ISSUE
+    return 0
 
 
 def _print_keywords():

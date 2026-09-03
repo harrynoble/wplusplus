@@ -9,3 +9,4 @@ venv/
 tests/_broken.wpp
 
 .claude/
+tests/_reserved.wpp

@@ -124,6 +124,34 @@ class LiteralSafetyTests(unittest.TestCase):
         self.assertEqual(translate('yap("oops'), 'print("oops')
 
 
+class ReservedWordTests(unittest.TestCase):
+    """Translation refuses a keyword where only a name can go."""
+
+    def test_definition_named_after_a_keyword_raises(self):
+        with self.assertRaises(SyntaxError) as caught:
+            translate("cook dip(self):\n    spill 1\n")
+        self.assertIn("'dip' is a W++ keyword", str(caught.exception))
+
+    def test_the_reported_line_is_the_definition(self):
+        with self.assertRaises(SyntaxError) as caught:
+            translate('yap("one")\nyap("two")\nclass nah:\n    pass\n')
+        self.assertEqual(caught.exception.lineno, 3)
+
+    def test_a_builtin_target_is_allowed(self):
+        # `squad` becomes `list`, which is a name rather than a reserved word.
+        self.assertEqual(translate("cook squad(x):"), "def list(x):")
+
+    def test_ordinary_definitions_do_not_raise(self):
+        self.assertEqual(translate("cook cookie(x):"), "def cookie(x):")
+        self.assertEqual(translate("class Recap:"), "class Recap:")
+
+    def test_a_keyword_inside_a_string_does_not_raise(self):
+        self.assertEqual(translate('yap("cook dip():")'), 'print("cook dip():")')
+
+    def test_a_keyword_in_a_comment_does_not_raise(self):
+        self.assertEqual(translate("yap(1)  # cook dip():"), "print(1)  # cook dip():")
+
+
 class StructureTests(unittest.TestCase):
     """Indentation and line numbering must survive translation."""
 
