@@ -1,0 +1,3 @@
+# A deliberately broken program, for demoing the Skill Issue Protocol.
+yap("about to fumble")
+yap(undefined_thing)

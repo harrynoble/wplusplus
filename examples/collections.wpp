@@ -1,0 +1,23 @@
+# Lists, dicts and sets - the squad, the tea and the cult.
+squad_goals = squad(range(1, 6))
+yap("squad:", squad_goals, "bodycount:", bodycount(squad_goals))
+
+the_tea = tea(name="W++", vibes=nocap, drama=cap)
+yap("tea:", the_tea["name"], the_tea["vibes"], the_tea["drama"])
+
+the_cult = cult([1, 1, 2, 3, 3])
+yap("cult:", sorted(the_cult))
+
+# grind + dip + skrrt
+i = 0
+grind nocap:
+    i = i + 1
+    bet i % 2 == 0:
+        skrrt
+    bet i > 7:
+        dip
+    yap("odd one out:", i)
+
+secret = npc
+bet secret is npc:
+    yap("npc confirmed")

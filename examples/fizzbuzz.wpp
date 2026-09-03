@@ -1,0 +1,12 @@
+cook fizzbuzz(limit):
+    spam i in range(1, limit + 1):
+        bet i % 15 == 0:
+            yap("FizzBuzz")
+        plotwist i % 3 == 0:
+            yap("Fizz")
+        plotwist i % 5 == 0:
+            yap("Buzz")
+        nah:
+            yap(i)
+
+fizzbuzz(15)

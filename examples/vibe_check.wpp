@@ -1,0 +1,8 @@
+cook check_vibe(name):
+    bet name == "Claude":
+        spill "W AI"
+    nah:
+        spill "Mid"
+
+username = dm("Who are you? ")
+yap("Vibe check: ", check_vibe(username))
