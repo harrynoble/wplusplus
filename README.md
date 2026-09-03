@@ -288,7 +288,8 @@ wpplang/runner.py       compile + execute, exit codes
 wpplang/errors.py       the Skill Issue Protocol
 playground/server.py    local web playground (stdlib HTTP server)
 playground/_worker.py   one child process per playground run
-playground/static/      the playground front end
+playground/static/      the playground front end, including the favicon
+playground/make_favicon.py  redraws static/favicon.ico from the same mark
 docs/WPP_Guide.pdf      the complete learning guide
 docs/build_guide.py     builds the guide, running every example in it
 examples/               runnable W++ programs

@@ -114,6 +114,84 @@ class StaticTests(ApiTestCase):
         self.assertEqual(len(body), os.path.getsize(ERROR_SOUND))
         self.assertTrue(body[:3] == b"ID3" or body[0] == 0xFF)
 
+    def test_the_favicon_is_served_in_both_formats(self):
+        with urllib.request.urlopen(self.base + "/favicon.svg", timeout=30) as response:
+            svg = response.read().decode("utf-8")
+            self.assertEqual(response.headers["Content-Type"], "image/svg+xml")
+        self.assertIn("<svg", svg)
+        self.assertIn("#3b82f6", svg)  # the accent, so the tab matches the app
+
+        with urllib.request.urlopen(self.base + "/favicon.ico", timeout=30) as response:
+            ico = response.read()
+            self.assertIn(response.headers["Content-Type"],
+                          ("image/x-icon", "image/vnd.microsoft.icon"))
+        # An ICO starts: reserved 0, type 1, then the number of images.
+        self.assertEqual(ico[:4], b"\x00\x00\x01\x00")
+        self.assertGreaterEqual(int.from_bytes(ico[4:6], "little"), 3)
+
+    def test_the_favicon_really_holds_every_size(self):
+        # Pillow's ICO writer silently drops sizes larger than its source
+        # image, so the container is built by hand - this proves it worked.
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow is not installed")
+
+        import io
+        with urllib.request.urlopen(self.base + "/favicon.ico", timeout=30) as response:
+            data = response.read()
+        sizes = sorted(Image.open(io.BytesIO(data)).info["sizes"])
+        self.assertIn((16, 16), sizes)
+        self.assertIn((32, 32), sizes)
+        for size in sizes:
+            frame = Image.open(io.BytesIO(data))
+            frame.size = size
+            frame.load()
+            self.assertEqual(frame.size, size)
+
+    def test_the_two_favicon_formats_draw_the_same_mark(self):
+        # favicon.svg is hand-written and favicon.ico is generated, so the two
+        # can drift. The numbers behind them must stay identical.
+        import os
+        import re
+
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        with open(os.path.join(root, "playground", "static", "favicon.svg"),
+                  encoding="utf-8") as handle:
+            svg = handle.read()
+        with open(os.path.join(root, "playground", "make_favicon.py"),
+                  encoding="utf-8") as handle:
+            generator = handle.read()
+
+        def numbers(text):
+            return [float(value) for value in re.findall(r"[\d.]+", text)]
+
+        svg_points = numbers(re.search(r'd="M([^"]+)"', svg).group(1))
+        gen_points = numbers(re.search(r"POINTS = \[(.+)\]", generator).group(1))
+        self.assertEqual(svg_points, gen_points, "the W outline differs")
+
+        self.assertEqual(
+            float(re.search(r'stroke-width="([\d.]+)"', svg).group(1)),
+            float(re.search(r"STROKE = ([\d.]+)", generator).group(1)),
+            "the stroke weight differs")
+        self.assertEqual(
+            float(re.search(r'rx="([\d.]+)"', svg).group(1)),
+            float(re.search(r"CORNER = ([\d.]+)", generator).group(1)),
+            "the corner radius differs")
+
+        red, green, blue = re.search(
+            r"ACCENT = \((\d+), (\d+), (\d+)", generator).groups()
+        self.assertEqual(
+            re.search(r'fill="(#[0-9a-fA-F]{6})"', svg).group(1).lower(),
+            "#%02x%02x%02x" % (int(red), int(green), int(blue)),
+            "the tile colour differs")
+
+    def test_the_page_links_the_favicon(self):
+        with urllib.request.urlopen(self.base + "/", timeout=30) as response:
+            page = response.read().decode("utf-8")
+        self.assertIn('href="favicon.svg"', page)
+        self.assertIn('href="favicon.ico"', page)
+
     def test_the_page_has_a_sound_toggle(self):
         with urllib.request.urlopen(self.base + "/", timeout=30) as response:
             page = response.read().decode("utf-8")
