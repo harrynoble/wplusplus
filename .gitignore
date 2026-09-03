@@ -10,3 +10,4 @@ tests/_broken.wpp
 
 .claude/
 tests/_reserved.wpp
+tests/_ast_probe.wpp

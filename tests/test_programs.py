@@ -342,19 +342,40 @@ class ReservedWordTests(ProgramTestCase):
             detail="'bet' is a W++ keyword (it becomes Python's 'if')",
         )
 
-    def test_names_that_only_shadow_a_builtin_are_allowed(self):
-        # `squad` -> `list` is not a reserved word, so this parses and keeps
-        # behaving the way it always has: the definition shadows the builtin.
-        self.assertEqual(translate("cook squad(x):"), "def list(x):")
+    def test_a_keyword_is_rejected_even_where_it_would_parse(self):
+        # `squad` becomes `list`, which is a name rather than a reserved word,
+        # so `cook squad(x)` used to produce valid-but-shadowing Python. The
+        # compiler now rejects every keyword used as a name, which is both
+        # simpler to explain and closer to what the spec says. This is a
+        # deliberate change from the pre-v1.2 behaviour.
+        self.assertFails(
+            "function called squad",
+            wpp("""
+                cook squad(x):
+                    spill x
+            """),
+            "Negative Aura: Bro forgot how to type (SyntaxError)",
+            line=1,
+            detail="'squad' is a W++ keyword")
 
     def test_ordinary_definitions_are_untouched(self):
-        self.assertEqual(translate("cook greet(name):"), "def greet(name):")
-        self.assertEqual(translate("class Box:"), "class Box:")
-        self.assertEqual(translate("cookie = 1"), "cookie = 1")
+        self.assertProgram(
+            "ordinary names",
+            wpp("""
+                cook greet(name):
+                    spill "hi " + name
+
+                class Box:
+                    cookie = 1
+
+                yap(greet("you"), Box.cookie)
+            """),
+            "hi you 1\n")
 
     def test_a_keyword_in_a_string_is_not_a_definition(self):
-        self.assertEqual(
-            translate('yap("cook dip(self):")'), 'print("cook dip(self):")')
+        got, error = execute('yap("cook dip(self):")\n')
+        self.assertIsNone(error)
+        self.assertEqual(got, "cook dip(self):\n")
 
     def test_methods_may_be_named_around_a_keyword(self):
         # The workaround, and the thing that should keep working.

@@ -210,20 +210,27 @@ def part_intro():
         snippet(
             "  your_program.wpp\n"
             "        |\n"
-            "        |  1. read the file\n"
             "        v\n"
-            "  swap the keywords          cook -> def, yap -> print, ...\n"
+            "  lexer            your source becomes W++ tokens\n"
+            "        |           see them with --tokens\n"
+            "        v\n"
+            "  parser           the tokens become a W++ syntax tree\n"
+            "        |           see it with --ast\n"
+            "        v\n"
+            "  checks           is `dip` in a loop? is `spill` in a `cook`?\n"
             "        |\n"
-            "        |  2. this is the only translation step\n"
             "        v\n"
-            "  ordinary Python source     see it yourself with --emit\n"
-            "        |\n"
-            "        |  3. hand it to Python\n"
+            "  code generator   the tree becomes ordinary Python\n"
+            "        |           see it with --emit\n"
             "        v\n"
-            "  your output, or a Skill Issue"
+            "  Python runs it -> your output, or a Skill Issue"
         ),
-        p("Two rules keep step 2 honest, and they are worth knowing early "
-          "because they explain nearly every surprise:"),
+        p("You do not need those stage names to write W++. They matter for one "
+          "reason: W++ reads your program properly rather than swapping words "
+          "in text, which is why the two rules below hold and why an error can "
+          "point at your line."),
+        p("Two rules are worth knowing early, because they explain nearly "
+          "every surprise:"),
         bullets([
             "<b>Keywords are matched as whole words.</b> A variable called "
             "<font face='%s'>cookie</font> is left alone; only a standalone "

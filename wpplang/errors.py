@@ -36,7 +36,7 @@ def skill_issue_message(exc):
     return "Unspecified skill issue ({})".format(type(exc).__name__)
 
 
-def skill_issue_details(exc, source_path=None, source_lines=None):
+def skill_issue_details(exc, source_path=None, source_lines=None, source_map=None):
     """Describe a skill issue as plain data.
 
     Returns a dict with the official ``message``, the Python ``exception``
@@ -46,19 +46,24 @@ def skill_issue_details(exc, source_path=None, source_lines=None):
     wording.
     """
     lineno = _locate(exc, source_path)
+    # A runtime failure reports the line of the *generated* Python, so ask the
+    # compiler's map which W++ line that came from.
+    if source_map is not None and lineno is not None:
+        lineno = source_map.wpp_line_for(lineno) or lineno
     return {
         "message": skill_issue_message(exc),
         "exception": type(exc).__name__,
         "path": None if source_path is None else str(source_path),
         "line": lineno,
+        "column": getattr(exc, "wpp_column", None),
         "source_line": _source_line(source_lines, lineno),
         "detail": _detail(exc),
     }
 
 
-def format_skill_issue(exc, source_path=None, source_lines=None):
+def format_skill_issue(exc, source_path=None, source_lines=None, source_map=None):
     """Render a full W++ error report for *exc* as terminal text."""
-    info = skill_issue_details(exc, source_path, source_lines)
+    info = skill_issue_details(exc, source_path, source_lines, source_map)
     lines = ["{} {}".format(SIREN, info["message"])]
 
     if info["path"] is not None and info["line"] is not None:

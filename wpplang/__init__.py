@@ -1,8 +1,11 @@
-"""W++ - a Gen Z programming language that translates to Python.
+"""W++ - a Gen Z programming language that compiles to Python.
+
+Since v1.2 the language has a real frontend: a lexer, a parser, a W++ AST, a
+semantic pass and a Python code generator, all under `wpplang.compiler`.
 
 Public API:
 
-    from wpplang import translate, run_file, KEYWORDS
+    from wpplang import translate, compile_wpp, run_file, KEYWORDS
 """
 
 from .errors import (
@@ -13,7 +16,7 @@ from .errors import (
 )
 from .keywords import CATEGORIES, KEYWORDS
 from .runner import Result, run_file, run_source
-from .translator import translate, translate_code, translate_file
+from .translator import CompiledProgram, compile_wpp, translate, translate_file
 
 __version__ = "1.1.0"
 
@@ -28,7 +31,8 @@ __all__ = [
     "run_source",
     "skill_issue_details",
     "skill_issue_message",
+    "CompiledProgram",
+    "compile_wpp",
     "translate",
-    "translate_code",
     "translate_file",
 ]

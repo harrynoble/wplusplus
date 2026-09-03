@@ -19,35 +19,73 @@ fizzbuzz(15)
 ```
 ## How W++ works
 
-W++ is Python with a different vocabulary. A W++ program is translated into Python
-source and then executed by the Python you already have installed:
+W++ has its own language frontend. Source is tokenized, parsed into a **W++
+AST**, checked, and only then translated into Python by a dedicated backend.
+Python is the execution target; it is not what W++ *is*.
 
 ```
    your_program.wpp
         |
         v
-   keyword translation      (wpplang/translator.py)
+   Lexer                 wpplang/compiler/lexer.py
+        |                 W++ tokens, each with a line and a column
+        v
+   Parser                wpplang/compiler/parser.py
+        |                 recursive descent + precedence climbing
+        v
+   W++ AST               wpplang/compiler/nodes.py
+        |                 FunctionDeclaration, IfStatement, ForStatement, ...
+        v
+   Semantic validation   wpplang/compiler/semantic.py
+        |                 `dip` inside a loop? `spill` inside a `cook`?
+        v
+   Python code generator wpplang/compiler/codegen.py
+        |                 walks the tree; emits Python + a W++ line map
+        v
+   Python runtime        wpplang/runner.py
         |
         v
-   Python source            (see it with --emit)
-        |
-        v
-   compile() + exec()       (wpplang/runner.py)
-        |
-        v
-   output, or a Skill Issue (wpplang/errors.py)
+   output, or a Skill Issue reported against your W++ line
 ```
 
-Two rules make the translation safe:
+Each stage has one job, and you can look at any of them:
 
-1. **Keywords are matched as whole words**, using regex word boundaries. `cookie`
-   stays `cookie`; only a standalone `cook` becomes `def`.
-2. **String literals and comments are copied through verbatim**, so
-   `yap("cook dinner")` prints `cook dinner` rather than `def dinner`.
+```bash
+python wpp.py --tokens my_program.wpp   # what the lexer saw
+python wpp.py --ast    my_program.wpp   # the tree the parser built
+python wpp.py --emit   my_program.wpp   # the Python the backend wrote
+```
 
-The translator never adds or removes lines, so line 12 of the generated Python is
-always line 12 of your `.wpp` file. That is what lets error messages point at your
-original source.
+### Why this is not find-and-replace
+
+*"Isn't W++ just renamed Python?"* W++ targets Python for execution, but it has
+its own frontend: source is tokenized and parsed into a W++ AST, validated, and
+translated by a separate backend. Two consequences you can check yourself:
+
+- **A keyword inside a string is never a keyword.** The lexer hands back the
+  whole literal as one token, so `yap("cook bet")` cannot become
+  `print("def if")` — not because a regular expression was written carefully,
+  but because nothing ever looks inside the string. Run `--tokens` and you will
+  see one `STRING` token.
+- **Errors talk about W++.** The AST carries a line and column on every node,
+  and the code generator records which W++ line produced each Python line, so a
+  failure names your line rather than a line in generated code you never saw.
+
+W++'s grammar *is* Python's grammar with nineteen renamed words, so the parser
+follows Python's statement forms and the lexer delegates character scanning to
+Python's keyword-agnostic `tokenize`. What makes the frontend W++'s own is that
+it recognises `bet`, `plotwist`, `nah`, `spam`, `grind`, `cook`, `spill`, `dip`
+and `skrrt`, records which W++ word opened each construct, and enforces W++'s
+own rules.
+
+W++ does **not** have its own runtime, and it does not compile to machine code.
+Python runs the result.
+
+### Two rules that keep translation honest
+
+1. **Keywords are words.** `cookie` and `cap_rate` are names; only a standalone
+   `cook` is a keyword. The lexer decides this once, per token.
+2. **String and comment contents are data.** They are never interpreted as code.
 
 ## Setup
 
@@ -69,6 +107,8 @@ python wpp.py examples/fizzbuzz.wpp
 | `python wpp.py FILE.wpp` | Translate and run a W++ program |
 | `python wpp.py --emit FILE.wpp` | Print the generated Python instead of running it |
 | `python wpp.py --keywords` | Print the Official Dictionary |
+| `python wpp.py --tokens FILE.wpp` | Print the W++ token stream |
+| `python wpp.py --ast FILE.wpp` | Print the W++ abstract syntax tree |
 | `python wpp.py --version` | Print the W++ version |
 | `python wpp.py --mute FILE.wpp` | Run without the error sound |
 | `python wpp.py --sound FILE.wpp` | Force the error sound on, even when piped |
@@ -278,14 +318,27 @@ functions. `tests/test_playground.py` covers the API: interactive prompts,
 several in a row, prompts inside a loop, the compute budget, Stop,
 runaway-output handling, and child-process cleanup.
 
+`tests/test_compiler.py` tests each compiler stage on its own - lexer, parser
+and AST shape, semantic rules, code generation, source mapping.
+`tests/test_compiler_equivalence.py` checks the compiler against the
+pre-v1.2 regex translator (kept at `tests/reference_translator.py`, and on no
+execution path): both target Python, so for every program in the repository the
+two must generate Python that parses to the same tree. That is how this
+refactor was shown to change no behaviour.
+
 ## Project layout
 
 ```
-wpp.py                  CLI entry point
-wpplang/keywords.py     the Official Dictionary (single source of truth)
-wpplang/translator.py   W++ -> Python source translation
-wpplang/runner.py       compile + execute, exit codes
-wpplang/errors.py       the Skill Issue Protocol
+wpp.py                     CLI entry point
+wpplang/keywords.py        the Official Dictionary (single source of truth)
+wpplang/compiler/lexer.py  W++ source -> W++ tokens
+wpplang/compiler/parser.py W++ tokens -> W++ AST
+wpplang/compiler/nodes.py  the W++ AST node types
+wpplang/compiler/semantic.py  whole-tree W++ rules
+wpplang/compiler/codegen.py   W++ AST -> Python, plus the line map
+wpplang/translator.py      the stable translate() front door
+wpplang/runner.py          compile + execute, exit codes
+wpplang/errors.py          the Skill Issue Protocol
 playground/server.py    local web playground (stdlib HTTP server)
 playground/_worker.py   one child process per playground run
 playground/static/      the playground front end, including the favicon
@@ -326,6 +379,14 @@ To add a keyword, add one line to `wpplang/keywords.py`. Everything else follows
 - **Errors are reported one at a time** — the first failure stops the program, as in
   Python.
 - **No REPL** and no `.wpp` module imports: a program is a single file.
+- **The compiler needs whole statements.** The old translator would rewrite any
+  fragment of text; the parser wants a program. `cook squad(x):` with no body is
+  no longer accepted, which is a deliberate change - it was never valid W++.
+- **A keyword is rejected wherever a name is required**, including as a
+  parameter or a keyword-argument name. The old translator let `f(bet=1)`
+  through as `f(if=1)`, which Python then refused with a confusing message about
+  code you never wrote; it is now refused up front, naming the word and the
+  line. Also a deliberate change.
 - **The playground is a local development tool**, not a hosted sandbox. It runs
   programs as your user account with only a time limit, so it belongs on your
   own machine and nowhere else.

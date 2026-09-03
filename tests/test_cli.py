@@ -116,6 +116,36 @@ class CommandLineTests(unittest.TestCase):
         self.assertEqual(done.returncode, 0, done.stderr)
         self.assertEqual(done.stdout.strip(), 'print("Hello world")')
 
+    def test_ast_prints_the_wpp_tree(self):
+        done = wpp("--ast", os.path.join(EXAMPLES, "vibe_check.wpp"))
+        self.assertEqual(done.returncode, 0, done.stderr)
+        # The tree describes W++ constructs, and carries positions.
+        for expected in ("Program", "FunctionDeclaration", "IfStatement",
+                         "ReturnStatement", "keyword='cook'", "@1:0"):
+            self.assertIn(expected, done.stdout)
+        # And no Python appears in it: the AST is not translated text.
+        self.assertNotIn("def ", done.stdout)
+
+    def test_tokens_prints_the_token_stream(self):
+        done = wpp("--tokens", os.path.join(EXAMPLES, "hello.wpp"))
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertIn("KEYWORD", done.stdout)
+        self.assertIn("'yap'", done.stdout)
+        # The whole string is one token, keywords inside it and all.
+        self.assertIn("STRING", done.stdout)
+
+    def test_ast_reports_a_bad_program_as_a_skill_issue(self):
+        path = os.path.join(ROOT, "tests", "_ast_probe.wpp")
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write("cook dip(self):\n    spill 1\n")
+        try:
+            done = wpp("--ast", path)
+            self.assertEqual(done.returncode, 1)
+            self.assertNotIn("Traceback", done.stderr)
+            self.assertIn("Bro forgot how to type", done.stderr)
+        finally:
+            os.remove(path)
+
     def test_keywords_table(self):
         done = wpp("--keywords")
         self.assertEqual(done.returncode, 0, done.stderr)

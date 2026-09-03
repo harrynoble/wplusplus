@@ -4,6 +4,8 @@
     python wpp.py examples/hello.wpp        run a W++ program
     python wpp.py --emit examples/hello.wpp print the generated Python
     python wpp.py --keywords                show the Official Dictionary
+    python wpp.py --ast examples/hello.wpp  show the W++ AST
+    python wpp.py --tokens examples/hello.wpp   show the W++ tokens
 
 A failing program also plays audio/fah.mp3 when the terminal is interactive.
 Use --mute to silence it, or --sound to force it on when output is piped.
@@ -15,6 +17,8 @@ import sys
 
 from wpplang import CATEGORIES, KEYWORDS, __version__, format_skill_issue, translate
 from wpplang import sound
+from wpplang.compiler import compile_source, tokenize_source
+from wpplang.compiler.errors import WppError
 from wpplang.runner import EXIT_SKILL_ISSUE, run_file
 
 EXIT_USAGE = 2
@@ -34,6 +38,18 @@ def main(argv=None):
         "--emit",
         action="store_true",
         help="print the translated Python instead of running it",
+    )
+    parser.add_argument(
+        "-a",
+        "--ast",
+        action="store_true",
+        help="print the W++ abstract syntax tree instead of running it",
+    )
+    parser.add_argument(
+        "-t",
+        "--tokens",
+        action="store_true",
+        help="print the W++ token stream instead of running it",
     )
     parser.add_argument(
         "-k",
@@ -69,6 +85,12 @@ def main(argv=None):
         print("wpp: no such file: {}".format(args.source), file=sys.stderr)
         return EXIT_USAGE
 
+    if args.tokens:
+        return show_tokens(args.source, args)
+
+    if args.ast:
+        return show_ast(args.source, args)
+
     if args.emit:
         return emit(args.source, args)
 
@@ -91,6 +113,36 @@ def emit(path, args):
     except (SyntaxError, ValueError) as exc:
         # Translation can refuse a program outright - a keyword used where only
         # a name can go - and that deserves a skill issue, not a traceback.
+        print(format_skill_issue(exc, path, source.splitlines()), file=sys.stderr)
+        sys.stderr.flush()
+        announce_failure(args)
+        return EXIT_SKILL_ISSUE
+    return 0
+
+
+def show_tokens(path, args):
+    """Print the token stream: the first stage of the compiler."""
+    def render(source):
+        return chr(10).join(
+            "{:>4}:{:<3} {:<8} {!r}".format(t.line, t.column, t.type, t.value)
+            for t in tokenize_source(source))
+
+    return _inspect(path, args, render)
+
+
+def show_ast(path, args):
+    """Print the W++ AST: what the parser built, before any Python exists."""
+    return _inspect(path, args, lambda source: compile_source(source).ast.dump())
+
+
+def _inspect(path, args, render):
+    """Run one inspection stage, reporting a bad program the usual way."""
+    with open(path, "r", encoding="utf-8") as handle:
+        source = handle.read()
+    try:
+        print(render(source))
+    except WppError as error:
+        exc = error.as_syntax_error(path)
         print(format_skill_issue(exc, path, source.splitlines()), file=sys.stderr)
         sys.stderr.flush()
         announce_failure(args)

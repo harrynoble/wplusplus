@@ -4,15 +4,16 @@ The pipeline is deliberately thin:
 
     .wpp source -> translate() -> Python source -> compile() -> exec()
 
-Because the translated Python keeps the original line numbering, the .wpp path
-is handed to compile() as the filename.  Tracebacks then point straight at the
-W++ file and the Skill Issue Protocol can quote the offending line.
+The .wpp path is handed to compile() as the filename, and the compiler's source
+map is carried alongside, so a Python exception raised inside generated code is
+reported against the W++ line the author wrote rather than a line number in
+code they never saw.
 """
 
 import os
 
 from .errors import format_skill_issue, skill_issue_details
-from .translator import translate
+from .translator import compile_wpp
 
 # Process exit codes.
 EXIT_OK = 0
@@ -48,11 +49,16 @@ def run_source(source, source_path="<wpp>", extra_globals=None):
     display_path = str(source_path)
     source_lines = source.splitlines()
 
+    source_map = None
     try:
-        python_source = translate(source)
-        code = compile(python_source, display_path, "exec")
+        compiled = compile_wpp(source, display_path)
+        source_map = compiled.source_map
+        code = compile(compiled.python, display_path, "exec")
     except (SyntaxError, ValueError) as exc:
-        return _failure(EXIT_SKILL_ISSUE, exc, display_path, source_lines)
+        # A frontend rejection already carries a W++ line; a SyntaxError from
+        # the generated Python would not, so map it back.
+        return _failure(EXIT_SKILL_ISSUE, exc, display_path, source_lines,
+                        source_map)
 
     # A fresh namespace that looks like a normal top-level script.
     namespace = {"__name__": "__main__", "__file__": display_path}
@@ -64,19 +70,21 @@ def run_source(source, source_path="<wpp>", extra_globals=None):
     except SystemExit as exc:  # `exit(2)` inside a W++ program is not an error.
         return Result(exc.code if isinstance(exc.code, int) else EXIT_OK)
     except KeyboardInterrupt as exc:
-        return _failure(EXIT_INTERRUPTED, exc, display_path, source_lines)
+        return _failure(EXIT_INTERRUPTED, exc, display_path, source_lines,
+                        source_map)
     except BaseException as exc:  # noqa: BLE001 - every failure becomes a skill issue.
-        return _failure(EXIT_SKILL_ISSUE, exc, display_path, source_lines)
+        return _failure(EXIT_SKILL_ISSUE, exc, display_path, source_lines,
+                        source_map)
 
     return Result(EXIT_OK)
 
 
-def _failure(exit_code, exc, display_path, source_lines):
+def _failure(exit_code, exc, display_path, source_lines, source_map=None):
     """Build a Result carrying both renderings of a skill issue."""
     return Result(
         exit_code,
-        format_skill_issue(exc, display_path, source_lines),
-        skill_issue_details(exc, display_path, source_lines),
+        format_skill_issue(exc, display_path, source_lines, source_map),
+        skill_issue_details(exc, display_path, source_lines, source_map),
     )
 
 
