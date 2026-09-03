@@ -58,6 +58,16 @@
       <span class="status" id="status" data-state="ready">Ready</span>
       <div class="pane-tools">
         <span class="timing" id="timing"></span>
+        <button class="btn btn-quiet btn-icon-only" id="sound-button"
+                aria-pressed="true" title="Mute the error sound"
+                aria-label="Mute the error sound">
+          <svg class="icon-sound" viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M8.5 2.2 4.8 5.2H2.4v5.6h2.4l3.7 3V2.2Z"/>
+            <path class="icon-wave" d="M11 5.4a3.6 3.6 0 0 1 0 5.2"/>
+            <path class="icon-wave" d="M12.9 3.6a6.2 6.2 0 0 1 0 8.8"/>
+            <path class="icon-slash" d="M11.4 5.6l3.8 4.8"/>
+          </svg>
+        </button>
         <button class="btn btn-quiet" id="stop-button" hidden>Stop</button>
         <button class="btn btn-quiet" id="clear-button">Clear</button>
       </div>

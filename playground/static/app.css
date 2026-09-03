@@ -148,6 +148,28 @@ body {
   flex: none;
 }
 
+/* Sound toggle: a drawn speaker, not an emoji. The waves show when the sound
+   is on, the slash when it is muted. */
+.btn-icon-only { padding: 5px 6px; }
+
+.icon-sound {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  fill: currentColor;
+  stroke: currentColor;
+  stroke-width: 1.2;
+  stroke-linecap: round;
+}
+
+.icon-sound .icon-wave { fill: none; }
+.icon-sound .icon-slash { display: none; fill: none; }
+
+/* The slash is what distinguishes the states; the colour already matches
+   the other quiet buttons. */
+#sound-button[aria-pressed="false"] .icon-wave { display: none; }
+#sound-button[aria-pressed="false"] .icon-slash { display: inline; }
+
 .btn-kbd {
   font-family: var(--font-mono);
   font-size: 10px;

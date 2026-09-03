@@ -71,6 +71,8 @@ python wpp.py examples/fizzbuzz.wpp
 | `python wpp.py --emit FILE.wpp` | Print the generated Python instead of running it |
 | `python wpp.py --keywords` | Print the Official Dictionary |
 | `python wpp.py --version` | Print the W++ version |
+| `python wpp.py --mute FILE.wpp` | Run without the error sound |
+| `python wpp.py --sound FILE.wpp` | Force the error sound on, even when piped |
 
 Exit codes: `0` success, `1` skill issue, `2` bad usage (missing file), `130` Ctrl-C.
 
@@ -234,9 +236,26 @@ about to fumble
 | `NameError` | 🚨 Bro is making up words now (NameError) |
 | `TypeError` | 🚨 Oil up bro, you can't combine those (TypeError) |
 | `IndexError` | 🚨 Blud thinks he has more items than he does (IndexError) |
-| `ZeroDivisionError` | 🚨 Bro just broke the matrix (ZeroDivisionError) |
+| `ZeroDivisionError` | 🚨 Math ain't mathing: Bro tried to divide by zero (ZeroDivisionError) |
 | `IndentationError` | 🚨 Your spaces are looking a little sus (IndentationError) |
 | `KeyboardInterrupt` | 🚨 Go touch grass, you've been looping forever (KeyboardInterrupt) |
+
+### The error sound
+
+A failing program plays `audio/fah.mp3`.
+
+In the **playground** it plays whenever an error appears; the speaker button in
+the output panel mutes and unmutes it, and the browser remembers your choice.
+
+On the **command line** it plays only when stderr is a terminal, so piping
+output into a file or another tool stays silent - and so does the test suite.
+`--mute` turns it off, `--sound` forces it on, and `WPP_MUTE=1` in the
+environment mutes it everywhere. Command-line flags beat the environment
+variable.
+
+Everything about the sound is best effort: if the file is missing, or the
+machine has no way to play an MP3, the sound is skipped and the error is
+reported exactly as before. Replace `audio/fah.mp3` to change it.
 
 Any exception outside this table is reported as
 `🚨 Unspecified skill issue (ExceptionName)` with the same file/line context — you

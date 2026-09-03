@@ -36,7 +36,8 @@
     [
       'examples-menu', 'examples-button', 'examples-list', 'docs-button', 'run-button',
       'run-shortcut', 'copy-button', 'reset-button', 'editor', 'splitter',
-      'status', 'timing', 'stop-button', 'clear-button', 'output', 'docs-drawer',
+      'status', 'timing', 'sound-button', 'stop-button', 'clear-button',
+      'output', 'docs-drawer',
       'drawer-body', 'drawer-close', 'drawer-scrim', 'toast', 'workspace'
     ].forEach(function (id) {
       el[camel(id)] = document.getElementById(id);
@@ -45,6 +46,7 @@
     el.runShortcut.textContent = IS_MAC ? 'Cmd+Enter' : 'Ctrl+Enter';
 
     wireEvents();
+    setupSound();
     loadReference();
     loadExamples();
     createEditor();
@@ -480,6 +482,7 @@
     if (record.error) {
       el.output.appendChild(errorBlock(record.error));
       if (record.error.line) editor.markError(record.error.line);
+      playErrorSound();
     } else if (!hasOutput()) {
       el.output.appendChild(note('Program finished without producing output.'));
     }
@@ -528,6 +531,76 @@
   function setStatus(state, label) {
     el.status.dataset.state = state;
     el.status.textContent = label || 'Ready';
+  }
+
+  /* ------------------------------------------------------------ error sound
+   *
+   * A failing program plays audio/fah.mp3 unless the sound is muted. The
+   * choice is remembered per browser. Browsers only allow audio after the
+   * user has interacted with the page, which pressing Run satisfies.
+   */
+
+  var MUTE_KEY = 'wpp.muted';
+  var sound = null;
+  var muted = false;
+
+  function setupSound() {
+    muted = readMuted();
+    applySoundButton();
+
+    try {
+      sound = new Audio('/audio/fah.mp3');
+      sound.preload = 'auto';
+    } catch (error) {
+      sound = null;   // no audio support: the toggle simply does nothing
+    }
+  }
+
+  function readMuted() {
+    try {
+      return localStorage.getItem(MUTE_KEY) === '1';
+    } catch (error) {
+      return false;   // private mode, or storage blocked
+    }
+  }
+
+  function writeMuted(value) {
+    try {
+      localStorage.setItem(MUTE_KEY, value ? '1' : '0');
+    } catch (error) {
+      /* remembering it is a convenience, not a requirement */
+    }
+  }
+
+  function applySoundButton() {
+    var label = muted ? 'Unmute the error sound' : 'Mute the error sound';
+    el.soundButton.setAttribute('aria-pressed', muted ? 'false' : 'true');
+    el.soundButton.setAttribute('aria-label', label);
+    el.soundButton.title = label;
+  }
+
+  function toggleSound() {
+    muted = !muted;
+    writeMuted(muted);
+    applySoundButton();
+    toast(muted ? 'Error sound muted' : 'Error sound on');
+    if (!muted) playErrorSound();   // confirm it works, and that it is audible
+  }
+
+  function playErrorSound() {
+    if (muted || !sound) return;
+    try {
+      sound.pause();
+      sound.currentTime = 0;
+      var started = sound.play();
+      // play() rejects when the browser blocks autoplay; that is not an error
+      // worth showing, so it is swallowed.
+      if (started && typeof started.catch === 'function') {
+        started.catch(function () {});
+      }
+    } catch (error) {
+      /* nothing to do: the skill issue is already on screen */
+    }
   }
 
   /* ----------------------------------------------- the output as a terminal */
@@ -726,6 +799,7 @@
     box.appendChild(node('div', 'error-message', 'The playground server is not responding.'));
     box.appendChild(node('div', 'error-detail', 'Start it again with: python playground/server.py'));
     el.output.appendChild(box);
+    playErrorSound();
   }
 
   function note(text) { return node('p', 'output-empty', text); }
@@ -948,6 +1022,7 @@
   function wireEvents() {
     el.runButton.addEventListener('click', run);
     el.stopButton.addEventListener('click', stopFromButton);
+    el.soundButton.addEventListener('click', toggleSound);
     el.clearButton.addEventListener('click', clearOutput);
     el.copyButton.addEventListener('click', copySource);
     el.resetButton.addEventListener('click', function () {

@@ -1641,11 +1641,32 @@ def part_tooling():
         h2("The dictionary, on demand"),
         shell("python wpp.py --keywords"),
         p("Prints the whole table from section 3 in your terminal."),
+        h2("The error sound"),
+        p("When a program fails, W++ plays "
+          "<font face='%s'>audio/fah.mp3</font>. In the playground it plays "
+          "whenever an error appears, and the speaker button in the output "
+          "panel mutes it - your browser remembers the choice. In the "
+          "terminal it plays only when you are running interactively, so "
+          "piping output into a file stays quiet." % MONO),
+        bullets([
+            "<font face='%s'>--mute</font> turns it off for one run." % MONO,
+            "<font face='%s'>--sound</font> forces it on even when output is "
+            "piped." % MONO,
+            "<font face='%s'>WPP_MUTE=1</font> in your environment mutes it "
+            "everywhere." % MONO,
+            "Replace <font face='%s'>audio/fah.mp3</font> with any MP3 to "
+            "change it." % MONO,
+        ]),
+        note("If the file is missing, or your machine cannot play an MP3, the "
+             "sound is skipped and the error is reported exactly as it would "
+             "be otherwise. Nothing about your program depends on it."),
         h2("Everything the command offers"),
         table(["Command", "What it does"],
               [["python wpp.py FILE.wpp", "run a program"],
                ["python wpp.py --emit FILE.wpp", "show the generated Python"],
                ["python wpp.py --keywords", "print the keyword table"],
+               ["python wpp.py --mute FILE.wpp", "run without the error sound"],
+               ["python wpp.py --sound FILE.wpp", "force the error sound on"],
                ["python wpp.py --version", "print the W++ version"],
                ["python playground/server.py", "start the web playground"]],
               widths=[2.6 * inch, 3.6 * inch]),
@@ -1668,6 +1689,8 @@ def part_tooling():
             "output panel and press Enter.",
             "A runaway loop is stopped after ten seconds of running - time "
             "spent waiting for you to type does not count.",
+            "The speaker button mutes the sound that plays when a program "
+            "fails.",
         ]),
     ]
 

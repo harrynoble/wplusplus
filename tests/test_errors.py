@@ -24,7 +24,7 @@ class SpecWordingTests(unittest.TestCase):
                 "NameError": "Bro is making up words now (NameError)",
                 "TypeError": "Oil up bro, you can't combine those (TypeError)",
                 "IndexError": "Blud thinks he has more items than he does (IndexError)",
-                "ZeroDivisionError": "Bro just broke the matrix (ZeroDivisionError)",
+                "ZeroDivisionError": "Math ain't mathing: Bro tried to divide by zero (ZeroDivisionError)",
                 "IndentationError": "Your spaces are looking a little sus (IndentationError)",
                 "KeyboardInterrupt": "Go touch grass, you've been looping forever (KeyboardInterrupt)",
             },

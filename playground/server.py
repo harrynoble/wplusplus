@@ -16,6 +16,7 @@ ask for input half way through:
 
     GET  /api/reference  the Official Dictionary and the Skill Issue table
     GET  /api/examples   the programs in examples/
+    GET  /audio/fah.mp3  the error sound, played by the page when unmuted
 
 All language behaviour comes from the `wpplang` package, so the playground and
 the CLI can never disagree about what W++ means.
@@ -41,6 +42,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from wpplang import CATEGORIES, KEYWORDS, SKILL_ISSUES, __version__  # noqa: E402
+from wpplang.sound import ERROR_SOUND  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -502,9 +504,24 @@ class PlaygroundHandler(SimpleHTTPRequestHandler):
             return self._send_json(load_examples())
         if path == "/api/stream":
             return self._stream()
+        if path == "/audio/fah.mp3":
+            return self._send_audio()
         if path.startswith("/api/"):
             return self._send_json({"error": "unknown endpoint"}, status=404)
         return super().do_GET()
+
+    def _send_audio(self):
+        """Serve the error sound, which lives outside static/."""
+        if not os.path.isfile(ERROR_SOUND):
+            return self._send_json({"error": "no sound installed"}, status=404)
+        with open(ERROR_SOUND, "rb") as handle:
+            body = handle.read()
+        self.send_response(200)
+        self.send_header("Content-Type", "audio/mpeg")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "max-age=86400")
+        self.end_headers()
+        self.wfile.write(body)
 
     def do_POST(self):
         path = self.path.split("?")[0]

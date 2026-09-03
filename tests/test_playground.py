@@ -104,6 +104,29 @@ class StaticTests(ApiTestCase):
             with self.subTest(file=name):
                 self.assertNotIn("\U0001f6a8", body)
 
+    def test_the_error_sound_is_served(self):
+        import os
+        from wpplang.sound import ERROR_SOUND
+
+        with urllib.request.urlopen(self.base + "/audio/fah.mp3", timeout=30) as response:
+            body = response.read()
+            self.assertEqual(response.headers["Content-Type"], "audio/mpeg")
+        self.assertEqual(len(body), os.path.getsize(ERROR_SOUND))
+        self.assertTrue(body[:3] == b"ID3" or body[0] == 0xFF)
+
+    def test_the_page_has_a_sound_toggle(self):
+        with urllib.request.urlopen(self.base + "/", timeout=30) as response:
+            page = response.read().decode("utf-8")
+        self.assertIn('id="sound-button"', page)
+        self.assertIn('aria-pressed', page)
+
+        with urllib.request.urlopen(self.base + "/app.js", timeout=30) as response:
+            script = response.read().decode("utf-8")
+        # The sound plays on an error, and the choice is remembered.
+        self.assertIn("playErrorSound", script)
+        self.assertIn("/audio/fah.mp3", script)
+        self.assertIn("localStorage", script)
+
     def test_no_stdin_box_remains(self):
         # Input happens inline in the output panel now.
         with urllib.request.urlopen(self.base + "/", timeout=30) as response:

@@ -4,6 +4,9 @@
     python wpp.py examples/hello.wpp        run a W++ program
     python wpp.py --emit examples/hello.wpp print the generated Python
     python wpp.py --keywords                show the Official Dictionary
+
+A failing program also plays audio/fah.mp3 when the terminal is interactive.
+Use --mute to silence it, or --sound to force it on when output is piped.
 """
 
 import argparse
@@ -11,6 +14,7 @@ import os
 import sys
 
 from wpplang import CATEGORIES, KEYWORDS, __version__, format_skill_issue, translate
+from wpplang import sound
 from wpplang.runner import EXIT_SKILL_ISSUE, run_file
 
 EXIT_USAGE = 2
@@ -37,6 +41,18 @@ def main(argv=None):
         action="store_true",
         help="print the Official Dictionary and exit",
     )
+    parser.add_argument(
+        "-m",
+        "--mute",
+        action="store_true",
+        help="do not play the error sound",
+    )
+    parser.add_argument(
+        "-s",
+        "--sound",
+        action="store_true",
+        help="play the error sound even when output is not a terminal",
+    )
     parser.add_argument("-V", "--version", action="version", version="W++ " + __version__)
     args = parser.parse_args(argv)
 
@@ -54,15 +70,19 @@ def main(argv=None):
         return EXIT_USAGE
 
     if args.emit:
-        return emit(args.source)
+        return emit(args.source, args)
 
     result = run_file(args.source)
     if result.error_report is not None:
+        # The report goes out first: the sound is an accompaniment, and it
+        # must never delay the message the user actually needs.
         print(result.error_report, file=sys.stderr)
+        sys.stderr.flush()
+        announce_failure(args)
     return result.exit_code
 
 
-def emit(path):
+def emit(path, args):
     """Print the generated Python, reporting a bad program the usual way."""
     with open(path, "r", encoding="utf-8") as handle:
         source = handle.read()
@@ -72,8 +92,39 @@ def emit(path):
         # Translation can refuse a program outright - a keyword used where only
         # a name can go - and that deserves a skill issue, not a traceback.
         print(format_skill_issue(exc, path, source.splitlines()), file=sys.stderr)
+        sys.stderr.flush()
+        announce_failure(args)
         return EXIT_SKILL_ISSUE
     return 0
+
+
+def announce_failure(args):
+    """Play the error sound, if the user wants one and we can manage it."""
+    if not wants_sound(args):
+        return
+    sound.play_error_sound(muted=False)
+
+
+def wants_sound(args):
+    """Decide whether this run should make a noise.
+
+    Unmuted is the default, but only for an interactive terminal: a program
+    whose output is being piped into a file or another tool should not start
+    playing audio, and neither should the test suite.  --sound overrides that.
+
+    Precedence, most specific first: --mute, --sound, WPP_MUTE, then whether
+    stderr is a terminal.
+    """
+    if args.mute:
+        return False
+    if args.sound:
+        return True
+    if sound.is_muted():
+        return False
+    try:
+        return bool(sys.stderr.isatty())
+    except (AttributeError, ValueError):
+        return False
 
 
 def _print_keywords():

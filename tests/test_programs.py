@@ -828,7 +828,7 @@ class DiagnosticTests(ProgramTestCase):
                 yap("before")
                 a()
             """),
-            "Bro just broke the matrix (ZeroDivisionError)",
+            "Math ain't mathing: Bro tried to divide by zero (ZeroDivisionError)",
             line=6, snippet="spill 1 / 0", output="before\n")
 
         self.assertFails(
@@ -840,7 +840,7 @@ class DiagnosticTests(ProgramTestCase):
         self.assertFails(
             "inside a comprehension",
             'rows = squad([1, 2, 0, 4])\nyap([10 // r spam r in rows])\n',
-            "Bro just broke the matrix (ZeroDivisionError)", line=2)
+            "Math ain't mathing: Bro tried to divide by zero (ZeroDivisionError)", line=2)
 
         self.assertFails(
             "inside a generator body",
@@ -851,7 +851,7 @@ class DiagnosticTests(ProgramTestCase):
 
                 yap(squad(gen()))
             """),
-            "Bro just broke the matrix (ZeroDivisionError)",
+            "Math ain't mathing: Bro tried to divide by zero (ZeroDivisionError)",
             line=3, snippet="yield 10 // (i - 1)")
 
         self.assertFails(
