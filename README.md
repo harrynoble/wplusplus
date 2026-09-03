@@ -74,6 +74,26 @@ python wpp.py examples/fizzbuzz.wpp
 
 Exit codes: `0` success, `1` skill issue, `2` bad usage (missing file), `130` Ctrl-C.
 
+## Learning W++
+
+[`docs/WPP_Guide.pdf`](docs/WPP_Guide.pdf) is a complete guide for someone who
+has never written W++ before: 57 pages covering every keyword, all the ordinary
+Python that comes with it, the Skill Issue Protocol, the reserved-word rule, and
+nine complete programs to read.
+
+Every example in it was executed by the interpreter while the PDF was being
+written, and the printed output is what actually came back. Rebuild it with:
+
+```bash
+python docs/build_guide.py
+```
+
+That needs `reportlab` (`pip install reportlab`) - the only dependency in the
+project, and only for regenerating the PDF. Running W++ itself still needs
+nothing but Python. `tests/test_guide.py` re-runs every example in the guide as
+part of the normal test suite, so the language cannot change without the guide
+being checked against it.
+
 ## The playground
 
 A local web playground with a code editor and an integrated output panel:
@@ -251,6 +271,8 @@ wpplang/errors.py       the Skill Issue Protocol
 playground/server.py    local web playground (stdlib HTTP server)
 playground/_worker.py   one child process per playground run
 playground/static/      the playground front end
+docs/WPP_Guide.pdf      the complete learning guide
+docs/build_guide.py     builds the guide, running every example in it
 examples/               runnable W++ programs
 tests/                  automated test suite
 ```
