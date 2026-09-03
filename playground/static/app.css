@@ -256,6 +256,8 @@ body {
   transition: color var(--speed) ease;
 }
 .status[data-state="running"]   { color: var(--text-muted); }
+.status[data-state="input"]     { color: var(--accent); }
+.status[data-state="stopped"]   { color: var(--text-muted); }
 .status[data-state="completed"] { color: var(--ok); }
 .status[data-state="error"]     { color: var(--err); }
 
@@ -343,49 +345,6 @@ body {
 .tok-comment  { color: #5f6874; font-style: italic; }
 .tok-operator { color: #93a1b1; }
 
-/* ----------------------------------------------------------------- stdin */
-
-.stdin {
-  flex: none;
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 6px 12px;
-  min-height: 34px;
-  border-top: 1px solid var(--border);
-  background: var(--surface);
-}
-
-.stdin-label {
-  font-size: 11px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--text-faint);
-  flex: none;
-  padding-top: 4px;
-}
-
-.stdin-input {
-  flex: 1 1 auto;
-  min-width: 0;
-  height: 22px;
-  max-height: 76px;
-  padding: 2px 8px;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  line-height: 17px;
-  color: var(--text);
-  background: var(--surface-input);
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  outline: none;
-  resize: none;
-  overflow-y: auto;
-  transition: border-color var(--speed) ease;
-}
-.stdin-input::placeholder { color: var(--text-faint); }
-.stdin-input:focus { border-color: var(--border-strong); }
-
 /* -------------------------------------------------------------- splitter */
 
 .splitter {
@@ -424,6 +383,28 @@ body {
   color: var(--text);
 }
 
+/* Program output on stderr, kept legible but visibly secondary. */
+.output-stderr { color: var(--err); }
+
+/* The inline caret the user types into, sitting in the output flow right
+   after whatever prompt the program printed. */
+.term-input {
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  color: var(--text);
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--accent);
+  outline: none;
+  padding: 0;
+  margin: 0;
+  min-width: 2ch;
+  caret-color: var(--accent);
+}
+
+.output.is-waiting { cursor: text; }
+
 .output-error {
   margin-top: 14px;
   padding: 12px 14px;
@@ -431,7 +412,29 @@ body {
   border-left: 2px solid var(--err);
   border-radius: 0 var(--radius) var(--radius) 0;
 }
-.output-stream:empty + .output-error { margin-top: 0; }
+.output-stream:empty + /* Program output on stderr, kept legible but visibly secondary. */
+.output-stderr { color: var(--err); }
+
+/* The inline caret the user types into, sitting in the output flow right
+   after whatever prompt the program printed. */
+.term-input {
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  color: var(--text);
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--accent);
+  outline: none;
+  padding: 0;
+  margin: 0;
+  min-width: 2ch;
+  caret-color: var(--accent);
+}
+
+.output.is-waiting { cursor: text; }
+
+.output-error { margin-top: 0; }
 
 .error-label {
   font-family: var(--font-ui);

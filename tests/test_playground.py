@@ -1,7 +1,8 @@
-"""Playground tests: the JSON API and the sandboxing around it."""
+"""Playground tests: the session API, interactive input, and the guards."""
 
 import json
 import threading
+import time
 import unittest
 import urllib.error
 import urllib.request
@@ -33,6 +34,8 @@ class ApiTestCase(unittest.TestCase):
         cls.server.server_close()
         cls.thread.join(timeout=5)
 
+    # -- plumbing
+
     def get(self, path):
         with urllib.request.urlopen(self.base + path, timeout=30) as response:
             return json.loads(response.read().decode("utf-8"))
@@ -46,6 +49,44 @@ class ApiTestCase(unittest.TestCase):
         )
         with urllib.request.urlopen(request, timeout=30) as response:
             return json.loads(response.read().decode("utf-8"))
+
+    def drive(self, source, answers=(), timeout=None, pause=0.0):
+        """Run a program the way the browser does.
+
+        Starts a session, reads its event stream, and types *answers* into the
+        prompts as they arrive.  Returns (output, result_record, events).
+        """
+        body = {"source": source}
+        if timeout is not None:
+            body["timeout"] = timeout
+        session_id = self.post("/api/run", body)["sessionId"]
+
+        stream = urllib.request.urlopen(
+            self.base + "/api/stream?session=" + session_id, timeout=60
+        )
+        pending = list(answers)
+        output, events = [], []
+
+        for raw in stream:
+            line = raw.decode("utf-8").strip()
+            if not line.startswith("data: "):
+                continue
+            record = json.loads(line[len("data: "):])
+            events.append(record)
+
+            if record["event"] in ("stdout", "stderr"):
+                output.append(record["text"])
+            elif record["event"] == "input":
+                if pause:
+                    time.sleep(pause)
+                self.post("/api/input", {
+                    "session": session_id,
+                    "text": pending.pop(0) if pending else "",
+                })
+            elif record["event"] == "result":
+                return "".join(output), record, events
+
+        return "".join(output), None, events
 
 
 class StaticTests(ApiTestCase):
@@ -62,6 +103,12 @@ class StaticTests(ApiTestCase):
                 body = response.read().decode("utf-8")
             with self.subTest(file=name):
                 self.assertNotIn("\U0001f6a8", body)
+
+    def test_no_stdin_box_remains(self):
+        # Input happens inline in the output panel now.
+        with urllib.request.urlopen(self.base + "/", timeout=30) as response:
+            body = response.read().decode("utf-8")
+        self.assertNotIn("stdin-input", body)
 
 
 class ReferenceTests(ApiTestCase):
@@ -83,16 +130,15 @@ class ReferenceTests(ApiTestCase):
         for required in ("Hello World", "Vibe Check", "FizzBuzz"):
             self.assertIn(required, names)
 
-    def test_vibe_check_ships_with_input(self):
+    def test_examples_carry_their_source(self):
         examples = {item["id"]: item for item in self.get("/api/examples")}
-        self.assertEqual(examples["vibe_check"]["stdin"], "Claude")
         self.assertIn("check_vibe", examples["vibe_check"]["source"])
 
 
 class RunTests(ApiTestCase):
     def test_hello_world(self):
-        result = self.post("/api/run", {"source": 'yap("Hello world")'})
-        self.assertEqual(result["stdout"].strip(), "Hello world")
+        output, result, _ = self.drive('yap("Hello world")')
+        self.assertEqual(output.strip(), "Hello world")
         self.assertIsNone(result["error"])
         self.assertEqual(result["exitCode"], 0)
 
@@ -109,30 +155,21 @@ class RunTests(ApiTestCase):
             "\n"
             "fizzbuzz(5)"
         )
-        result = self.post("/api/run", {"source": source})
-        self.assertEqual(result["stdout"].split(), ["1", "2", "Fizz", "4", "5"])
-
-    def test_stdin_feeds_dm(self):
-        result = self.post(
-            "/api/run",
-            {"source": 'name = dm("Who? ")\nyap(name)', "stdin": "Claude\n"},
-        )
-        self.assertIn("Claude", result["stdout"])
-        self.assertIsNone(result["error"])
+        output, _, _ = self.drive(source)
+        self.assertEqual(output.split(), ["1", "2", "Fizz", "4", "5"])
 
     def test_error_is_structured_and_has_no_emoji(self):
-        result = self.post("/api/run", {"source": "yap(1)\nyap(nope)"})
+        output, result, _ = self.drive("yap(1)\nyap(nope)")
         error = result["error"]
         self.assertEqual(error["message"], "Bro is making up words now (NameError)")
         self.assertEqual(error["exception"], "NameError")
         self.assertEqual(error["line"], 2)
         self.assertEqual(error["source_line"], "yap(nope)")
         self.assertNotIn("\U0001f6a8", json.dumps(result))
-        # Output produced before the failure is still returned.
-        self.assertEqual(result["stdout"].strip(), "1")
+        self.assertEqual(output.strip(), "1")  # output before the failure survives
 
     def test_syntax_error_reports_a_line(self):
-        result = self.post("/api/run", {"source": "cook f(:"})
+        _, result, _ = self.drive("cook f(:")
         self.assertEqual(
             result["error"]["message"],
             "Negative Aura: Bro forgot how to type (SyntaxError)",
@@ -140,42 +177,167 @@ class RunTests(ApiTestCase):
         self.assertEqual(result["error"]["line"], 1)
 
     def test_each_run_is_isolated(self):
-        self.post("/api/run", {"source": "leftover = 1"})
-        result = self.post("/api/run", {"source": "yap(leftover)"})
+        self.drive("leftover = 1")
+        _, result, _ = self.drive("yap(leftover)")
         self.assertEqual(result["error"]["exception"], "NameError")
 
-    def test_run_reports_duration(self):
-        result = self.post("/api/run", {"source": "yap(1)"})
-        self.assertIsInstance(result["durationMs"], int)
+    def test_stderr_is_reported_separately(self):
+        _, _, events = self.drive("import sys\nsys.stderr.write('to stderr')")
+        kinds = {event["event"] for event in events}
+        self.assertIn("stderr", kinds)
+
+
+class InteractiveInputTests(ApiTestCase):
+    """dm() must block for a real answer, not hit EOF."""
+
+    def test_single_prompt(self):
+        output, result, _ = self.drive(
+            'name = dm("Who are you? ")\nyap("hi", name)', ["Claude"]
+        )
+        self.assertEqual(output, "Who are you? hi Claude\n")
+        self.assertIsNone(result["error"])
+
+    def test_prompt_arrives_before_the_input_request(self):
+        # The caret must never be drawn above the text that asked for it.
+        _, _, events = self.drive('yap("first")\nx = dm("then: ")\nyap(x)', ["ok"])
+        kinds = [event["event"] for event in events]
+        self.assertLess(kinds.index("stdout"), kinds.index("input"))
+        prompts = [e["text"] for e in events if e["event"] == "stdout"]
+        self.assertIn("then: ", prompts)
+
+    def test_several_prompts_in_a_row(self):
+        output, result, _ = self.drive(
+            'a = dm("first: ")\nb = dm("second: ")\nc = dm("third: ")\nyap(a, b, c)',
+            ["one", "two", "three"],
+        )
+        self.assertEqual(output, "first: second: third: one two three\n")
+        self.assertIsNone(result["error"])
+
+    def test_prompt_inside_a_loop(self):
+        source = (
+            "total = 0\n"
+            "spam i in range(3):\n"
+            '    total = total + int(dm("n: "))\n'
+            'yap("total", total)'
+        )
+        output, result, _ = self.drive(source, ["1", "2", "3"])
+        self.assertIn("total 6", output)
+        self.assertIsNone(result["error"])
+
+    def test_empty_answer_is_accepted(self):
+        output, result, _ = self.drive('x = dm("name: ")\nyap(bodycount(x))', [""])
+        self.assertIn("0", output)
+        self.assertIsNone(result["error"])
+
+    def test_official_vibe_check_runs_interactively(self):
+        import os
+        path = os.path.join(playground.EXAMPLES_DIR, "vibe_check.wpp")
+        with open(path, encoding="utf-8") as handle:
+            source = handle.read()
+        output, result, _ = self.drive(source, ["Claude"])
+        self.assertIn("Vibe check:  W AI", output)
+        self.assertIsNone(result["error"])
+
+    def test_waiting_for_input_does_not_burn_the_compute_budget(self):
+        # A one-second budget must survive a much longer pause at the prompt.
+        output, result, _ = self.drive(
+            'x = dm("slow: ")\nyap("got", x)', ["late"], timeout=1, pause=2.5
+        )
         self.assertFalse(result["timedOut"])
+        self.assertIsNone(result["error"])
+        self.assertIn("got late", output)
+
+    def test_reported_duration_excludes_the_wait(self):
+        _, result, _ = self.drive(
+            'x = dm("q: ")\nyap(x)', ["a"], timeout=5, pause=1.5
+        )
+        self.assertLess(result["durationMs"], 1500)
+
+    def test_input_after_the_run_is_refused(self):
+        session_id = self.post("/api/run", {"source": 'yap("done")'})["sessionId"]
+        # Drain the stream so the session is definitely finished.
+        stream = urllib.request.urlopen(
+            self.base + "/api/stream?session=" + session_id, timeout=30
+        )
+        for raw in stream:
+            if b'"result"' in raw:
+                break
+        with self.assertRaises(urllib.error.HTTPError) as caught:
+            self.post("/api/input", {"session": session_id, "text": "late"})
+        self.assertEqual(caught.exception.code, 409)
+
+    def test_a_newline_cannot_be_smuggled_into_one_line(self):
+        # Two prompts, but the first answer tries to satisfy both at once.
+        output, result, _ = self.drive(
+            'a = dm("a: ")\nb = dm("b: ")\nyap("[" + a + "][" + b + "]")',
+            ["one\ntwo", "second"],
+        )
+        self.assertIn("[onetwo][second]", output)
+        self.assertIsNone(result["error"])
 
 
 class GuardTests(ApiTestCase):
     def test_runaway_loop_is_stopped(self):
-        # Called directly so the test can use a one-second budget.
-        result = playground.execute("grind nocap:\n    x = 1", "", timeout=1)
+        started = time.monotonic()
+        _, result, _ = self.drive("grind nocap:\n    x = 1", timeout=1)
         self.assertTrue(result["timedOut"])
         self.assertEqual(
             result["error"]["message"],
             "Go touch grass, you've been looping forever (KeyboardInterrupt)",
         )
         self.assertEqual(result["exitCode"], 130)
+        self.assertLess(time.monotonic() - started, 20)
 
     def test_partial_output_survives_a_timeout(self):
-        result = playground.execute(
-            "yap('before the loop')\ngrind nocap:\n    x = 1", "", timeout=2
+        output, _, _ = self.drive(
+            "yap('before the loop')\ngrind nocap:\n    x = 1", timeout=1
         )
-        self.assertIn("before the loop", result["stdout"])
+        self.assertIn("before the loop", output)
+
+    def test_stop_ends_a_waiting_program(self):
+        session_id = self.post(
+            "/api/run", {"source": 'x = dm("never: ")\nyap(x)'}
+        )["sessionId"]
+        stream = urllib.request.urlopen(
+            self.base + "/api/stream?session=" + session_id, timeout=30
+        )
+        result = None
+        for raw in stream:
+            line = raw.decode("utf-8").strip()
+            if not line.startswith("data: "):
+                continue
+            record = json.loads(line[len("data: "):])
+            if record["event"] == "input":
+                self.post("/api/stop", {"session": session_id})
+            elif record["event"] == "result":
+                result = record
+                break
+        self.assertIsNotNone(result)
+        self.assertTrue(result["stopped"])
+
+    def test_no_worker_survives_a_stop(self):
+        session = playground.SESSIONS.create('x = dm("wait: ")')
+        # Let the child reach the prompt before pulling the plug.
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline and not session.waiting:
+            time.sleep(0.05)
+        session.stop()
+        session.process.wait(timeout=10)
+        self.assertIsNotNone(session.process.poll())
 
     def test_oversized_program_is_rejected(self):
-        payload = {"source": "x = 1\n" * 60000}
         with self.assertRaises(urllib.error.HTTPError) as caught:
-            self.post("/api/run", payload)
+            self.post("/api/run", {"source": "x = 1\n" * 60000})
         self.assertEqual(caught.exception.code, 413)
 
     def test_unknown_endpoint(self):
         with self.assertRaises(urllib.error.HTTPError) as caught:
             self.get("/api/nope")
+        self.assertEqual(caught.exception.code, 404)
+
+    def test_unknown_session(self):
+        with self.assertRaises(urllib.error.HTTPError) as caught:
+            self.post("/api/input", {"session": "nope", "text": "x"})
         self.assertEqual(caught.exception.code, 404)
 
     def test_non_json_body_is_rejected(self):
@@ -193,6 +355,17 @@ class GuardTests(ApiTestCase):
         with self.assertRaises(urllib.error.HTTPError) as caught:
             self.post("/api/run", {"source": 42})
         self.assertEqual(caught.exception.code, 400)
+
+    def test_run_directory_is_cleaned_up(self):
+        import os
+        session = playground.SESSIONS.create('yap("bye")')
+        workdir = session.workdir
+        self.assertTrue(os.path.isdir(workdir))
+        session.finished.wait(timeout=20)
+        deadline = time.monotonic() + 15
+        while time.monotonic() < deadline and os.path.isdir(workdir):
+            time.sleep(0.1)
+        self.assertFalse(os.path.isdir(workdir))
 
 
 if __name__ == "__main__":

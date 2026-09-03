@@ -38,8 +38,13 @@ class Result:
         return self.error_report is None
 
 
-def run_source(source, source_path="<wpp>"):
-    """Translate and execute W++ source text.  Never raises for user errors."""
+def run_source(source, source_path="<wpp>", extra_globals=None):
+    """Translate and execute W++ source text.  Never raises for user errors.
+
+    ``extra_globals`` is merged into the program's namespace, where it shadows
+    builtins of the same name.  The playground uses it to supply an interactive
+    ``input`` (the target of W++'s ``dm``) without touching this module.
+    """
     display_path = str(source_path)
     source_lines = source.splitlines()
 
@@ -51,6 +56,8 @@ def run_source(source, source_path="<wpp>"):
 
     # A fresh namespace that looks like a normal top-level script.
     namespace = {"__name__": "__main__", "__file__": display_path}
+    if extra_globals:
+        namespace.update(extra_globals)
 
     try:
         exec(code, namespace)

@@ -47,12 +47,6 @@
     </div>
 
     <div class="editor-host" id="editor"></div>
-
-    <div class="stdin">
-      <label class="stdin-label" for="stdin-input">Stdin</label>
-      <textarea class="stdin-input" id="stdin-input" rows="1" spellcheck="false"
-                autocomplete="off" placeholder="Input for dm(), one value per line"></textarea>
-    </div>
   </section>
 
   <div class="splitter" id="splitter" role="separator" aria-orientation="vertical" tabindex="0"
@@ -64,6 +58,7 @@
       <span class="status" id="status" data-state="ready">Ready</span>
       <div class="pane-tools">
         <span class="timing" id="timing"></span>
+        <button class="btn btn-quiet" id="stop-button" hidden>Stop</button>
         <button class="btn btn-quiet" id="clear-button">Clear</button>
       </div>
     </div>

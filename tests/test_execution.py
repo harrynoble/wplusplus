@@ -164,6 +164,34 @@ class CollectionTests(unittest.TestCase):
         self.assertEqual(out, "[0, 2, 4]\n")
 
 
+class ExtraGlobalsTests(unittest.TestCase):
+    """`extra_globals` shadows builtins, which is how the playground makes
+    dm() interactive without this module knowing anything about the web."""
+
+    def test_supplied_input_shadows_the_builtin(self):
+        asked = []
+
+        def fake_input(prompt=""):
+            asked.append(prompt)
+            return "from the caller"
+
+        buffer = io.StringIO()
+        with redirect_stdout(buffer):
+            result = run_source(
+                'yap(dm("prompt: "))', "test.wpp", extra_globals={"input": fake_input}
+            )
+        self.assertTrue(result.ok)
+        self.assertEqual(asked, ["prompt: "])
+        self.assertEqual(buffer.getvalue(), "from the caller\n")
+
+    def test_extra_globals_are_optional(self):
+        buffer = io.StringIO()
+        with redirect_stdout(buffer):
+            result = run_source('yap("no extras")', "test.wpp")
+        self.assertTrue(result.ok)
+        self.assertEqual(buffer.getvalue(), "no extras\n")
+
+
 class ExitCodeTests(unittest.TestCase):
     def test_success_exit_code(self):
         _, result = run("yap(1)")

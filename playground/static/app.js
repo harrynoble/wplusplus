@@ -29,16 +29,15 @@
   var reference = null;
   var examples = [];
   var editor = null;
-  var running = false;
 
   /* ------------------------------------------------------------ bootstrap */
 
   function boot() {
     [
       'examples-menu', 'examples-button', 'examples-list', 'docs-button', 'run-button',
-      'run-shortcut', 'copy-button', 'reset-button', 'editor', 'stdin-input', 'splitter',
-      'status', 'timing', 'clear-button', 'output', 'docs-drawer', 'drawer-body',
-      'drawer-close', 'drawer-scrim', 'toast', 'workspace'
+      'run-shortcut', 'copy-button', 'reset-button', 'editor', 'splitter',
+      'status', 'timing', 'stop-button', 'clear-button', 'output', 'docs-drawer',
+      'drawer-body', 'drawer-close', 'drawer-scrim', 'toast', 'workspace'
     ].forEach(function (id) {
       el[camel(id)] = document.getElementById(id);
     });
@@ -392,42 +391,136 @@
     });
   }
 
-  /* ------------------------------------------------------------ execution */
+  /* ------------------------------------------------------------ execution
+   *
+   * A run is a session, because a W++ program can pause and ask for input.
+   * POST /api/run starts it, an EventSource streams the ordered records the
+   * worker produces, and POST /api/input feeds one line back when the program
+   * blocks on dm().  Records arrive in program order, so the caret is always
+   * drawn after the prompt that asked for it.
+   */
+
+  var session = null;                                  // the live run, if any
+  var stream = { pre: null, node: null, caret: null };  // the output transcript
 
   function run() {
-    if (running || !editor) return;
-    running = true;
-    el.runButton.disabled = true;
-    editor.clearError();
+    if (!editor) return;
+    stopSession();               // a second Run replaces the run in progress
+    beginOutput();
     setStatus('running', 'Running...');
     el.timing.textContent = '';
+    el.stopButton.hidden = false;
+    editor.clearError();
 
     fetch('/api/run', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ source: editor.getValue(), stdin: stdinValue() })
+      body: JSON.stringify({ source: editor.getValue() })
     })
       .then(toJson)
-      .then(function (result) {
-        renderResult(result);
-        el.timing.textContent = result.durationMs + ' ms';
-        setStatus(result.error ? 'error' : 'completed', result.error ? 'Error' : 'Completed');
-        if (result.error && result.error.line) editor.markError(result.error.line);
+      .then(function (data) {
+        session = { id: data.sessionId, stream: null, settled: false };
+        listen(session);
       })
       .catch(function () {
         renderDisconnected();
-        setStatus('error', 'Error');
-      })
-      .finally(function () {
-        running = false;
-        el.runButton.disabled = false;
+        finishRun('error', 'Error');
       });
   }
 
-  function stdinValue() {
-    var text = el.stdinInput.value;
-    if (!text) return '';
-    return text.endsWith('\n') ? text : text + '\n';
+  function listen(current) {
+    var source = new EventSource('/api/stream?session=' + encodeURIComponent(current.id));
+    current.stream = source;
+
+    source.onmessage = function (message) {
+      var record;
+      try {
+        record = JSON.parse(message.data);
+      } catch (error) {
+        return;
+      }
+      handleRecord(current, record);
+    };
+
+    source.onerror = function () {
+      // EventSource reconnects on its own, which we never want here: either
+      // the run is already over, or the connection is genuinely gone.
+      source.close();
+      if (current.settled) return;
+      current.settled = true;
+      removeCaret();
+      renderDisconnected();
+      finishRun('error', 'Error');
+    };
+  }
+
+  function handleRecord(current, record) {
+    if (record.event === 'stdout') {
+      appendText(record.text);
+      return;
+    }
+    if (record.event === 'stderr') {
+      appendText(record.text, 'output-stderr');
+      return;
+    }
+    if (record.event === 'input') {
+      showCaret(current);
+      return;
+    }
+    if (record.event !== 'result') {
+      return;
+    }
+
+    current.settled = true;
+    if (current.stream) current.stream.close();
+    removeCaret();
+
+    if (record.error) {
+      el.output.appendChild(errorBlock(record.error));
+      if (record.error.line) editor.markError(record.error.line);
+    } else if (!hasOutput()) {
+      el.output.appendChild(note('Program finished without producing output.'));
+    }
+
+    el.timing.textContent = record.durationMs + ' ms';
+    if (record.error) {
+      finishRun('error', 'Error');
+    } else if (record.stopped) {
+      finishRun('stopped', 'Stopped');
+    } else {
+      finishRun('completed', 'Completed');
+    }
+    scrollOutput();
+  }
+
+  function finishRun(state, label) {
+    setStatus(state, label);
+    el.stopButton.hidden = true;
+    el.output.classList.remove('is-waiting');
+    session = null;
+  }
+
+  function stopSession() {
+    var current = session;
+    if (!current) return;
+    session = null;
+    current.settled = true;
+    if (current.stream) current.stream.close();
+    removeCaret();
+    el.stopButton.hidden = true;
+    el.output.classList.remove('is-waiting');
+    // Best effort: the server also ends a run when its stream drops.
+    fetch('/api/stop', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session: current.id })
+    }).catch(function () {});
+  }
+
+  function stopFromButton() {
+    if (!session) return;
+    stopSession();
+    setStatus('stopped', 'Stopped');
   }
 
   function setStatus(state, label) {
@@ -435,26 +528,111 @@
     el.status.textContent = label || 'Ready';
   }
 
-  /* --------------------------------------------------------------- output */
+  /* ----------------------------------------------- the output as a terminal */
 
-  function renderResult(result) {
+  function beginOutput() {
     el.output.textContent = '';
+    stream.pre = document.createElement('pre');
+    stream.pre.className = 'output-stream';
+    stream.node = null;
+    stream.caret = null;
+    el.output.appendChild(stream.pre);
+  }
 
-    var streams = (result.stdout || '') + (result.stderr || '');
-    if (streams) {
-      var pre = document.createElement('pre');
-      pre.className = 'output-stream';
-      pre.textContent = streams;
-      el.output.appendChild(pre);
+  /* Text is appended to a trailing text node, which leaves the caret element
+     and any earlier styled runs exactly where they are. */
+  function appendText(text, cls) {
+    if (!text || !stream.pre) return;
+
+    if (cls) {
+      var span = document.createElement('span');
+      span.className = cls;
+      span.textContent = text;
+      stream.pre.appendChild(span);
+      stream.node = null;
+    } else {
+      if (!stream.node) {
+        stream.node = document.createTextNode('');
+        stream.pre.appendChild(stream.node);
+      }
+      stream.node.appendData(text);
     }
+    scrollOutput();
+  }
 
-    if (result.error) {
-      el.output.appendChild(errorBlock(result.error));
-    } else if (!streams) {
-      el.output.appendChild(note('Program finished without producing output.'));
+  function hasOutput() {
+    return !!stream.pre && stream.pre.textContent.length > 0;
+  }
+
+  /* The caret is a real input living in the output flow, immediately after
+     whatever prompt the program just printed. */
+  function showCaret(current) {
+    if (!stream.pre) return;
+    removeCaret();
+
+    var caret = document.createElement('input');
+    caret.type = 'text';
+    caret.className = 'term-input';
+    caret.setAttribute('spellcheck', 'false');
+    caret.setAttribute('autocomplete', 'off');
+    caret.setAttribute('autocapitalize', 'off');
+    caret.setAttribute('aria-label', 'Program input');
+    caret.style.width = '2ch';
+
+    caret.addEventListener('input', function () {
+      caret.style.width = Math.max(2, caret.value.length + 1) + 'ch';
+    });
+
+    caret.addEventListener('keydown', function (event) {
+      if (event.key !== 'Enter') return;
+      event.preventDefault();
+      event.stopPropagation();   // Enter here is not the global run shortcut
+      submitCaret(current, caret);
+    });
+
+    stream.pre.appendChild(caret);
+    stream.node = null;
+    stream.caret = caret;
+
+    el.output.classList.add('is-waiting');
+    setStatus('input', 'Waiting for input');
+    caret.focus();
+    scrollOutput();
+  }
+
+  function submitCaret(current, caret) {
+    var text = caret.value;
+    removeCaret();
+    // Echo the typed line, the way a terminal shows your own keystrokes.
+    appendText(text + '\n');
+    el.output.classList.remove('is-waiting');
+    setStatus('running', 'Running...');
+
+    fetch('/api/input', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session: current.id, text: text })
+    })
+      .then(toJson)
+      .catch(function () {
+        if (current.settled) return;
+        current.settled = true;
+        if (current.stream) current.stream.close();
+        renderDisconnected();
+        finishRun('error', 'Error');
+      });
+  }
+
+  function removeCaret() {
+    if (stream.caret && stream.caret.parentNode) {
+      stream.caret.parentNode.removeChild(stream.caret);
     }
+    stream.caret = null;
+    stream.node = null;
+  }
 
-    el.output.scrollTop = 0;
+  function scrollOutput() {
+    el.output.scrollTop = el.output.scrollHeight;
   }
 
   function errorBlock(error) {
@@ -473,16 +651,15 @@
     if (error.detail) {
       box.appendChild(node('div', 'error-detail', error.detail));
     }
-    if (error.exception === 'EOFError') {
-      box.appendChild(node('div', 'error-hint',
-        'This program asked for input with dm(). Type a value in the Stdin box and run it again.'));
-    }
 
     return box;
   }
 
   function renderDisconnected() {
     el.output.textContent = '';
+    stream.pre = null;
+    stream.node = null;
+    stream.caret = null;
     var box = document.createElement('div');
     box.className = 'output-error';
     box.appendChild(node('div', 'error-label', 'Error'));
@@ -501,7 +678,11 @@
   }
 
   function clearOutput() {
+    stopSession();
     el.output.textContent = '';
+    stream.pre = null;
+    stream.node = null;
+    stream.caret = null;
     el.output.appendChild(note('Run your W++ program to see the result here.'));
     el.timing.textContent = '';
     setStatus('ready', 'Ready');
@@ -531,20 +712,8 @@
   function loadExample(example) {
     if (!editor) return;
     editor.setValue(example.source);
-    setStdin(example.stdin || '');
     clearOutput();
     editor.focus();
-  }
-
-  function setStdin(text) {
-    el.stdinInput.value = text;
-    growStdin();
-  }
-
-  /* The stdin box starts one line tall and grows with its content. */
-  function growStdin() {
-    el.stdinInput.style.height = 'auto';
-    el.stdinInput.style.height = Math.min(el.stdinInput.scrollHeight, 76) + 'px';
   }
 
   function openMenu() {
@@ -717,17 +886,23 @@
 
   function wireEvents() {
     el.runButton.addEventListener('click', run);
+    el.stopButton.addEventListener('click', stopFromButton);
     el.clearButton.addEventListener('click', clearOutput);
     el.copyButton.addEventListener('click', copySource);
     el.resetButton.addEventListener('click', function () {
       if (!editor) return;
       editor.setValue(STARTER_SOURCE);
-      setStdin('');
       clearOutput();
       editor.focus();
     });
 
-    el.stdinInput.addEventListener('input', growStdin);
+    // Clicking anywhere in the output focuses the caret, like a terminal does.
+    el.output.addEventListener('mousedown', function (event) {
+      if (!stream.caret || event.target === stream.caret) return;
+      if (window.getSelection && String(window.getSelection()).length) return;
+      event.preventDefault();
+      stream.caret.focus();
+    });
 
     el.examplesButton.addEventListener('click', function (event) {
       event.stopPropagation();
@@ -743,7 +918,7 @@
 
     document.addEventListener('keydown', function (event) {
       if (event.key === 'Escape') { closeMenu(); closeDrawer(); }
-      // Ctrl/Cmd+Enter runs from anywhere, including the Stdin box.
+      // Ctrl/Cmd+Enter runs from anywhere on the page.
       if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
         event.preventDefault();
         run();

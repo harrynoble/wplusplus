@@ -83,15 +83,37 @@ python playground/server.py
 ```
 
 It opens http://127.0.0.1:8000. Pick a program from the Examples menu, press
-**Run** (or Ctrl+Enter), and the result appears beside the editor. Programs that
-call `dm()` read from the Stdin box.
+**Run** (or Ctrl+Enter), and the output appears beside the editor.
 
-The playground is a thin front end over the same interpreter: it serves the
-static page and exposes three endpoints (`/api/reference`, `/api/examples`,
-`/api/run`), and every run happens in a fresh child process with a 10-second
-limit, so a runaway `grind` loop cannot hang the server. The editor is Monaco
-when it can be reached, and a small built-in editor otherwise, so the
-playground still works offline.
+**Input is interactive.** When a program calls `dm()`, the prompt is printed in
+the output panel and a caret appears right after it - you type your answer there
+and press Enter, exactly like a terminal. A program can ask as many times as it
+likes, in a loop if it wants; each `dm()` waits for its own line. **Stop** ends a
+run that is still going.
+
+A run is a *session*, because a program can pause half way through to ask a
+question:
+
+| Endpoint | Purpose |
+| --- | --- |
+| `POST /api/run` | start a program, returns a session id |
+| `GET /api/stream?session=ID` | server-sent events: output, prompts, result |
+| `POST /api/input` | one line of input for a waiting `dm()` |
+| `POST /api/stop` | end the run |
+| `GET /api/reference` | the keyword and Skill Issue tables |
+| `GET /api/examples` | the programs in `examples/` |
+
+Every run happens in a fresh child process, so nothing leaks between runs. The
+worker reports output *and* prompts on a single ordered channel, which is what
+guarantees the caret is never drawn above the text that asked for it.
+
+Runs have a **10-second budget, measured in time actually spent running** - time
+sitting at a prompt does not count, so you can take as long as you like to
+answer while a runaway `grind` loop is still stopped after ten seconds. The
+reported duration is compute time for the same reason.
+
+The editor is Monaco when it can be reached, and a small built-in editor
+otherwise, so the playground still works offline.
 
 `python playground/server.py --port 9000 --no-browser` changes the port and
 skips opening a browser.
@@ -205,7 +227,8 @@ python -m unittest discover -s tests -t .
 Covers every keyword translation, word-boundary and string-literal safety,
 expressions, functions, conditionals, loops, collections, I/O, exit codes, every
 Skill Issue message, the official spec examples run end to end, and the
-playground API including its timeout guard.
+playground API - interactive `dm()` prompts, several prompts in a row, prompts
+inside a loop, the compute budget, Stop, and child-process cleanup.
 
 ## Project layout
 
