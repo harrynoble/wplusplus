@@ -161,6 +161,11 @@ Vibe check:  W AI
 More in [`examples/`](examples/): `hello.wpp`, `vibe_check.wpp`, `fizzbuzz.wpp`,
 `collections.wpp`, `oops.wpp`.
 
+[`examples/keyword_tour.wpp`](examples/keyword_tour.wpp) exercises **every**
+keyword in the dictionary in one program, and a test asserts that it stays that
+way - add a keyword to `wpplang/keywords.py` without using it there and the
+suite fails.
+
 ## Error handling — the Skill Issue Protocol
 
 Python tracebacks are intercepted and re-presented in W++ terms, with the file, the

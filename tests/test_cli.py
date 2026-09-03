@@ -1,9 +1,12 @@
 """End-to-end tests: the CLI and the official example programs from the spec."""
 
 import os
+import re
 import subprocess
 import sys
 import unittest
+
+from wpplang import KEYWORDS, translate
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 EXAMPLES = os.path.join(ROOT, "examples")
@@ -58,6 +61,53 @@ class OfficialExampleTests(unittest.TestCase):
         done = wpp(os.path.join(EXAMPLES, "collections.wpp"))
         self.assertEqual(done.returncode, 0, done.stderr)
         self.assertIn("npc confirmed", done.stdout)
+
+
+class KeywordTourTests(unittest.TestCase):
+    """examples/keyword_tour.wpp must exercise the whole dictionary."""
+
+    @classmethod
+    def setUpClass(cls):
+        with open(os.path.join(EXAMPLES, "keyword_tour.wpp"), encoding="utf-8") as handle:
+            cls.source = handle.read()
+
+    def test_every_keyword_is_exercised(self):
+        # Compare against the translated Python with comments and strings
+        # removed, so a keyword only counts when it was really translated.
+        code = _strip_literals(translate(self.source))
+        missing = [
+            word for word, target in KEYWORDS.items()
+            if not re.search(r"(?<![\w.])" + re.escape(target) + r"(?!\w)", code)
+        ]
+        self.assertEqual(missing, [], "keywords never exercised: {}".format(missing))
+
+    def test_it_runs_and_prints_every_section(self):
+        done = wpp(os.path.join(EXAMPLES, "keyword_tour.wpp"), stdin="Claude\n")
+        self.assertEqual(done.returncode, 0, done.stderr)
+        for expected in (
+            "numbers:    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]",
+            "bodycount:  10",
+            "countdown:  0",
+            "flags:      [True, False, None]",
+            "sum:        6",
+            "gm, Claude",
+        ):
+            self.assertIn(expected, done.stdout)
+
+    def test_it_falls_back_when_no_name_is_given(self):
+        done = wpp(os.path.join(EXAMPLES, "keyword_tour.wpp"), stdin="\n")
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertIn("gm, anon", done.stdout)
+
+
+def _strip_literals(code):
+    """Remove comments and string literals from Python source."""
+    without_strings = re.sub(
+        r"'''[\s\S]*?'''|\"\"\"[\s\S]*?\"\"\"|'(?:[^'\\\n]|\\.)*'|\"(?:[^\"\\\n]|\\.)*\"",
+        "''",
+        code,
+    )
+    return re.sub(r"#[^\n]*", "", without_strings)
 
 
 class CommandLineTests(unittest.TestCase):

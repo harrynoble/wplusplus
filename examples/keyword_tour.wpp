@@ -1,0 +1,56 @@
+# Keyword tour - every word in the Official Dictionary, exercised once.
+# The comment at the end of a line names the keyword it demonstrates.
+
+cook classify(n):                                   # cook
+    bet n % 15 == 0:                                # bet
+        spill "FizzBuzz"                            # spill
+    plotwist n % 3 == 0:                            # plotwist
+        spill "Fizz"
+    plotwist n % 5 == 0:
+        spill "Buzz"
+    nah:                                            # nah
+        spill n
+
+
+cook total_of(items):
+    running = 0
+    spam item in items:                             # spam
+        bet item is npc:                            # npc
+            skrrt                                   # skrrt
+        running = running + item
+    spill running
+
+
+# Lists, sizes and sequences
+numbers = squad(range(1, 11))                       # squad, range
+yap("numbers:   ", numbers)                         # yap
+yap("bodycount: ", bodycount(numbers))              # bodycount
+
+# Dictionaries
+labels = tea()                                      # tea
+spam n in numbers:
+    labels[n] = classify(n)
+yap("labels:    ", labels)
+
+# Sets
+unique = cult([classify(n) spam n in numbers])      # cult
+yap("unique:    ", sorted(unique, key=str))
+
+# Loops that exit early
+countdown = 5
+grind nocap:                                        # grind, nocap
+    bet countdown == 0:
+        dip                                         # dip
+    countdown = countdown - 1
+yap("countdown: ", countdown)
+
+# Booleans and the null value
+flags = squad([nocap, cap, npc])                    # cap
+yap("flags:     ", flags)
+yap("sum:       ", total_of([1, npc, 2, npc, 3]))
+
+# Input
+name = dm("your name: ")                            # dm
+bet bodycount(name) == 0:
+    name = "anon"
+yap("gm,", name)

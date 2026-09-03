@@ -50,6 +50,7 @@ EXAMPLES = [
     {"id": "vibe_check", "name": "Vibe Check", "file": "vibe_check.wpp", "stdin": "Claude"},
     {"id": "fizzbuzz", "name": "FizzBuzz", "file": "fizzbuzz.wpp", "stdin": ""},
     {"id": "collections", "name": "Collections", "file": "collections.wpp", "stdin": ""},
+    {"id": "keyword_tour", "name": "Keyword Tour", "file": "keyword_tour.wpp", "stdin": "Claude"},
     {"id": "oops", "name": "Skill Issue", "file": "oops.wpp", "stdin": ""},
 ]
 
