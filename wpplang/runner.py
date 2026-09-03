@@ -11,7 +11,7 @@ W++ file and the Skill Issue Protocol can quote the offending line.
 
 import os
 
-from .errors import format_skill_issue
+from .errors import format_skill_issue, skill_issue_details
 from .translator import translate
 
 # Process exit codes.
@@ -21,11 +21,17 @@ EXIT_INTERRUPTED = 130  # Conventional shell code for Ctrl-C.
 
 
 class Result:
-    """Outcome of running a W++ program."""
+    """Outcome of running a W++ program.
 
-    def __init__(self, exit_code, error_report=None):
+    ``error_report`` is the terminal-ready text used by the CLI;
+    ``error_details`` is the same skill issue as plain data, for callers that
+    render their own UI (see wpplang.errors.skill_issue_details).
+    """
+
+    def __init__(self, exit_code, error_report=None, error_details=None):
         self.exit_code = exit_code
         self.error_report = error_report
+        self.error_details = error_details
 
     @property
     def ok(self):
@@ -41,10 +47,7 @@ def run_source(source, source_path="<wpp>"):
         python_source = translate(source)
         code = compile(python_source, display_path, "exec")
     except (SyntaxError, ValueError) as exc:
-        return Result(
-            EXIT_SKILL_ISSUE,
-            format_skill_issue(exc, display_path, source_lines),
-        )
+        return _failure(EXIT_SKILL_ISSUE, exc, display_path, source_lines)
 
     # A fresh namespace that looks like a normal top-level script.
     namespace = {"__name__": "__main__", "__file__": display_path}
@@ -54,17 +57,20 @@ def run_source(source, source_path="<wpp>"):
     except SystemExit as exc:  # `exit(2)` inside a W++ program is not an error.
         return Result(exc.code if isinstance(exc.code, int) else EXIT_OK)
     except KeyboardInterrupt as exc:
-        return Result(
-            EXIT_INTERRUPTED,
-            format_skill_issue(exc, display_path, source_lines),
-        )
+        return _failure(EXIT_INTERRUPTED, exc, display_path, source_lines)
     except BaseException as exc:  # noqa: BLE001 - every failure becomes a skill issue.
-        return Result(
-            EXIT_SKILL_ISSUE,
-            format_skill_issue(exc, display_path, source_lines),
-        )
+        return _failure(EXIT_SKILL_ISSUE, exc, display_path, source_lines)
 
     return Result(EXIT_OK)
+
+
+def _failure(exit_code, exc, display_path, source_lines):
+    """Build a Result carrying both renderings of a skill issue."""
+    return Result(
+        exit_code,
+        format_skill_issue(exc, display_path, source_lines),
+        skill_issue_details(exc, display_path, source_lines),
+    )
 
 
 def run_file(path):

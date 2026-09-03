@@ -36,22 +36,40 @@ def skill_issue_message(exc):
     return "Unspecified skill issue ({})".format(type(exc).__name__)
 
 
-def format_skill_issue(exc, source_path=None, source_lines=None):
-    """Render a full W++ error report for *exc* as a string."""
-    lines = ["{} {}".format(SIREN, skill_issue_message(exc))]
+def skill_issue_details(exc, source_path=None, source_lines=None):
+    """Describe a skill issue as plain data.
 
+    Returns a dict with the official ``message``, the Python ``exception``
+    name, the ``line`` in the .wpp source, that ``source_line`` itself and the
+    original Python ``detail``.  The terminal renderer and the web playground
+    both build their output from this, so they can never disagree about the
+    wording.
+    """
     lineno = _locate(exc, source_path)
-    if source_path is not None and lineno is not None:
-        lines.append("   where: {}, line {}".format(source_path, lineno))
-        snippet = _source_line(source_lines, lineno)
-        if snippet is not None:
-            lines.append("   {:>4} | {}".format(lineno, snippet))
-    elif source_path is not None:
-        lines.append("   where: {}".format(source_path))
+    return {
+        "message": skill_issue_message(exc),
+        "exception": type(exc).__name__,
+        "path": None if source_path is None else str(source_path),
+        "line": lineno,
+        "source_line": _source_line(source_lines, lineno),
+        "detail": _detail(exc),
+    }
 
-    detail = _detail(exc)
-    if detail:
-        lines.append("   details: {}".format(detail))
+
+def format_skill_issue(exc, source_path=None, source_lines=None):
+    """Render a full W++ error report for *exc* as terminal text."""
+    info = skill_issue_details(exc, source_path, source_lines)
+    lines = ["{} {}".format(SIREN, info["message"])]
+
+    if info["path"] is not None and info["line"] is not None:
+        lines.append("   where: {}, line {}".format(info["path"], info["line"]))
+        if info["source_line"] is not None:
+            lines.append("   {:>4} | {}".format(info["line"], info["source_line"]))
+    elif info["path"] is not None:
+        lines.append("   where: {}".format(info["path"]))
+
+    if info["detail"]:
+        lines.append("   details: {}".format(info["detail"]))
 
     return "\n".join(lines)
 

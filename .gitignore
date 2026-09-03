@@ -7,3 +7,5 @@ venv/
 .coverage
 .DS_Store
 tests/_broken.wpp
+
+.claude/

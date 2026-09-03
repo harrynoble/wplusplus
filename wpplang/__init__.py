@@ -5,7 +5,12 @@ Public API:
     from wpplang import translate, run_file, KEYWORDS
 """
 
-from .errors import SKILL_ISSUES, format_skill_issue, skill_issue_message
+from .errors import (
+    SKILL_ISSUES,
+    format_skill_issue,
+    skill_issue_details,
+    skill_issue_message,
+)
 from .keywords import CATEGORIES, KEYWORDS
 from .runner import Result, run_file, run_source
 from .translator import translate, translate_code, translate_file
@@ -21,6 +26,7 @@ __all__ = [
     "format_skill_issue",
     "run_file",
     "run_source",
+    "skill_issue_details",
     "skill_issue_message",
     "translate",
     "translate_code",

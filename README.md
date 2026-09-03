@@ -74,6 +74,31 @@ python wpp.py examples/fizzbuzz.wpp
 
 Exit codes: `0` success, `1` skill issue, `2` bad usage (missing file), `130` Ctrl-C.
 
+## The playground
+
+A local web playground with a code editor and an integrated output panel:
+
+```bash
+python playground/server.py
+```
+
+It opens http://127.0.0.1:8000. Pick a program from the Examples menu, press
+**Run** (or Ctrl+Enter), and the result appears beside the editor. Programs that
+call `dm()` read from the Stdin box.
+
+The playground is a thin front end over the same interpreter: it serves the
+static page and exposes three endpoints (`/api/reference`, `/api/examples`,
+`/api/run`), and every run happens in a fresh child process with a 10-second
+limit, so a runaway `grind` loop cannot hang the server. The editor is Monaco
+when it can be reached, and a small built-in editor otherwise, so the
+playground still works offline.
+
+`python playground/server.py --port 9000 --no-browser` changes the port and
+skips opening a browser.
+
+> The playground executes the code it is given. It binds to `127.0.0.1` so it is
+> reachable only from your machine - do not expose it to a network.
+
 ## The Official Dictionary
 
 | W++ | Python | Category |
@@ -174,7 +199,8 @@ python -m unittest discover -s tests -t .
 
 Covers every keyword translation, word-boundary and string-literal safety,
 expressions, functions, conditionals, loops, collections, I/O, exit codes, every
-Skill Issue message, and the official spec examples run end to end.
+Skill Issue message, the official spec examples run end to end, and the
+playground API including its timeout guard.
 
 ## Project layout
 
@@ -184,6 +210,9 @@ wpplang/keywords.py     the Official Dictionary (single source of truth)
 wpplang/translator.py   W++ -> Python source translation
 wpplang/runner.py       compile + execute, exit codes
 wpplang/errors.py       the Skill Issue Protocol
+playground/server.py    local web playground (stdlib HTTP server)
+playground/_worker.py   one child process per playground run
+playground/static/      the playground front end
 examples/               runnable W++ programs
 tests/                  automated test suite
 ```
@@ -205,3 +234,6 @@ To add a keyword, add one line to `wpplang/keywords.py`. Everything else follows
 - **Errors are reported one at a time** — the first failure stops the program, as in
   Python.
 - **No REPL** and no `.wpp` module imports: a program is a single file.
+- **The playground is a local development tool**, not a hosted sandbox. It runs
+  programs as your user account with only a time limit, so it belongs on your
+  own machine and nowhere else.

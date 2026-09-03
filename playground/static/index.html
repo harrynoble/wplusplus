@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>W++ Playground</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+
+<header class="header">
+  <div class="brand">
+    <span class="brand-mark">W++</span>
+    <span class="brand-sub">Gen-Z programming language</span>
+  </div>
+
+  <nav class="header-actions">
+    <div class="menu" id="examples-menu">
+      <button class="btn btn-ghost" id="examples-button" aria-haspopup="true" aria-expanded="false">
+        Examples
+      </button>
+      <ul class="menu-list" id="examples-list" role="menu" hidden></ul>
+    </div>
+
+    <button class="btn btn-ghost" id="docs-button" aria-expanded="false">Documentation</button>
+
+    <button class="btn btn-primary" id="run-button">
+      <svg class="btn-icon" viewBox="0 0 10 10" aria-hidden="true"><path d="M2 1.2 8.4 5 2 8.8Z"/></svg>
+      <span>Run</span>
+      <kbd class="btn-kbd" id="run-shortcut">Ctrl+Enter</kbd>
+    </button>
+  </nav>
+</header>
+
+<main class="workspace" id="workspace">
+
+  <section class="pane pane-editor">
+    <div class="pane-head">
+      <h2 class="pane-title">main.wpp</h2>
+      <div class="pane-tools">
+        <button class="btn btn-quiet" id="copy-button">Copy</button>
+        <button class="btn btn-quiet" id="reset-button">Reset</button>
+      </div>
+    </div>
+
+    <div class="editor-host" id="editor"></div>
+
+    <div class="stdin">
+      <label class="stdin-label" for="stdin-input">Stdin</label>
+      <textarea class="stdin-input" id="stdin-input" rows="1" spellcheck="false"
+                autocomplete="off" placeholder="Input for dm(), one value per line"></textarea>
+    </div>
+  </section>
+
+  <div class="splitter" id="splitter" role="separator" aria-orientation="vertical" tabindex="0"
+       aria-label="Resize editor and output"></div>
+
+  <section class="pane pane-output">
+    <div class="pane-head">
+      <h2 class="pane-title">Output</h2>
+      <span class="status" id="status" data-state="ready">Ready</span>
+      <div class="pane-tools">
+        <span class="timing" id="timing"></span>
+        <button class="btn btn-quiet" id="clear-button">Clear</button>
+      </div>
+    </div>
+    <div class="output" id="output" tabindex="0">
+      <p class="output-empty">Run your W++ program to see the result here.</p>
+    </div>
+  </section>
+
+</main>
+
+<aside class="drawer" id="docs-drawer" hidden aria-labelledby="drawer-title">
+  <div class="drawer-head">
+    <h2 class="drawer-title" id="drawer-title">Documentation</h2>
+    <button class="btn btn-quiet" id="drawer-close" aria-label="Close documentation">Close</button>
+  </div>
+  <div class="drawer-body" id="drawer-body"></div>
+</aside>
+<div class="drawer-scrim" id="drawer-scrim" hidden></div>
+
+<div class="toast" id="toast" hidden></div>
+
+<script src="app.js"></script>
+</body>
+</html>
