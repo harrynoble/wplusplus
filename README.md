@@ -17,7 +17,6 @@ cook fizzbuzz(limit):
 
 fizzbuzz(15)
 ```
-
 ## How W++ works
 
 W++ is Python with a different vocabulary. A W++ program is translated into Python
@@ -81,7 +80,7 @@ Exit codes: `0` success, `1` skill issue, `2` bad usage (missing file), `130` Ct
 [`docs/WPP_Guide.pdf`](docs/WPP_Guide.pdf) is a complete guide for someone who
 has never written W++ before: 57 pages covering every keyword, all the ordinary
 Python that comes with it, the Skill Issue Protocol, the reserved-word rule, and
-nine complete programs to read.
+nine complete programs to read..
 
 Every example in it was executed by the interpreter while the PDF was being
 written, and the printed output is what actually came back. Rebuild it with:
