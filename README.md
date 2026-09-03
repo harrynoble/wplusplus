@@ -186,6 +186,66 @@ skips opening a browser.
 > The playground executes the code it is given. It binds to `127.0.0.1` so it is
 > reachable only from your machine - do not expose it to a network.
 
+## Deploying the playground
+
+The playground runs W++ two ways from the same files, and picks one at load
+time by asking whether a backend is there:
+
+| | Where W++ runs | Used when |
+| --- | --- | --- |
+| **Server engine** | `playground/server.py`, one child process per program | you run it locally |
+| **Browser engine** | the same `wpplang` package under Pyodide, in a Web Worker | there is no backend |
+
+The frontend cannot tell them apart: both emit the same records, so the editor,
+the inline input caret, the Skill Issue Protocol and the runaway-loop limit
+behave identically.
+
+### Static hosting (Vercel, Netlify, GitHub Pages)
+
+The site is **static files with no build step**, because the compiler's Python
+sources are committed as `playground/static/wpp-sources.json`. Point the host at
+`playground/static` and that is the whole deployment. `vercel.json` already does
+this:
+
+```json
+{ "outputDirectory": "playground/static" }
+```
+
+So linking the repository to Vercel deploys a working playground. Nothing runs
+on the server — the compiler is downloaded and executed in the visitor's
+browser, which is also why this is safe to expose: there is no backend to
+execute code on.
+
+Regenerate the bundle after changing the compiler:
+
+```bash
+python tools/build_web_bundle.py
+```
+
+`tests/test_web_bundle.py` fails if the committed bundle no longer matches the
+package, so it cannot quietly go stale.
+
+### What the browser engine costs
+
+- **A first-load download** of Pyodide (CPython on WebAssembly, tens of MB from
+  a CDN) and a few seconds to start. After that a program runs in milliseconds.
+- **Interactive `dm()` works by replay.** A browser cannot pause synchronous
+  Python to wait for typing without extra isolation headers, so instead the
+  program is run again from the start with each new answer, and the transcript
+  is rebuilt. For the small programs W++ is for this is invisible - each attempt
+  takes milliseconds - but a program whose output depends on `random` or the
+  clock can differ between attempts.
+- **A runaway loop is stopped by discarding the worker**, which is the only way
+  to interrupt synchronous Python in a browser. The next run boots a fresh one
+  in the background.
+
+### Do not host the server engine publicly
+
+`playground/server.py` executes the code it is given, with a timeout and no
+sandbox. It binds `127.0.0.1` deliberately. The browser engine is the one to
+deploy: the visitor's own browser runs their own code, and there is nothing of
+yours for it to reach.
+
 ## The Official Dictionary
 
 | W++ | Python | Category |
@@ -342,7 +402,11 @@ wpplang/errors.py          the Skill Issue Protocol
 playground/server.py    local web playground (stdlib HTTP server)
 playground/_worker.py   one child process per playground run
 playground/static/      the playground front end, including the favicon
+playground/static/engine.js      picks the server or the browser engine
+playground/static/wpp-worker.js  runs the compiler under Pyodide
+playground/static/wpp-sources.json  the compiler, bundled for the browser
 playground/make_favicon.py  redraws static/favicon.ico from the same mark
+tools/build_web_bundle.py   rebuilds wpp-sources.json
 docs/WPP_Guide.pdf      the complete learning guide
 docs/build_guide.py     builds the guide, running every example in it
 examples/               runnable W++ programs

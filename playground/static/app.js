@@ -29,6 +29,7 @@
   var reference = null;
   var examples = [];
   var editor = null;
+  var engine = null;      // where W++ runs: the server, or this browser
 
   /* ------------------------------------------------------------ bootstrap */
 
@@ -47,9 +48,19 @@
 
     wireEvents();
     setupSound();
-    loadReference();
-    loadExamples();
     createEditor();
+
+    // Which engine is available decides nothing about the interface: both
+    // speak the same records. See engine.js.
+    window.WppEngine.create().then(function (chosen) {
+      engine = chosen;
+      if (engine.kind === 'browser') {
+        el.status.title = 'W++ is running in this browser';
+        toast('Running W++ in your browser');
+      }
+      loadReference();
+      loadExamples();
+    });
   }
 
   function camel(id) {
@@ -59,7 +70,7 @@
   /* ------------------------------------------------------------- the data */
 
   function loadReference() {
-    fetch('/api/reference').then(toJson).then(function (data) {
+    engine.reference().then(function (data) {
       reference = data;
       keywords = new Set(Object.keys(data.keywords));
       if (editor && editor.refreshKeywords) editor.refreshKeywords();
@@ -68,7 +79,7 @@
   }
 
   function loadExamples() {
-    fetch('/api/examples').then(toJson).then(function (data) {
+    engine.examples().then(function (data) {
       examples = data;
       renderExamplesMenu();
     }).catch(function () {
@@ -406,7 +417,7 @@
   var stream = { pre: null, node: null, caret: null };  // the output transcript
 
   function run() {
-    if (!editor) return;
+    if (!editor || !engine) return;
     stopSession();               // a second Run replaces the run in progress
     beginOutput();
     setStatus('running', 'Running...');
@@ -414,49 +425,30 @@
     el.stopButton.hidden = false;
     editor.clearError();
 
-    fetch('/api/run', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ source: editor.getValue() })
-    })
-      .then(toJson)
-      .then(function (data) {
-        session = { id: data.sessionId, stream: null, settled: false };
-        listen(session);
-      })
-      .catch(function () {
+    // The engine decides where this happens; the records that come back are
+    // the same either way.
+    var current = { settled: false, handle: null };
+    session = current;
+
+    current.handle = engine.start(
+      editor.getValue(),
+      function (record) { handleRecord(current, record); },
+      function () {
+        if (current.settled) return;
+        current.settled = true;
+        removeCaret();
         renderDisconnected();
         finishRun('error', 'Error');
       });
   }
 
-  function listen(current) {
-    var source = new EventSource('/api/stream?session=' + encodeURIComponent(current.id));
-    current.stream = source;
-
-    source.onmessage = function (message) {
-      var record;
-      try {
-        record = JSON.parse(message.data);
-      } catch (error) {
-        return;
-      }
-      handleRecord(current, record);
-    };
-
-    source.onerror = function () {
-      // EventSource reconnects on its own, which we never want here: either
-      // the run is already over, or the connection is genuinely gone.
-      source.close();
-      if (current.settled) return;
-      current.settled = true;
-      removeCaret();
-      renderDisconnected();
-      finishRun('error', 'Error');
-    };
-  }
-
   function handleRecord(current, record) {
+    if (record.event === 'reset') {
+      // The browser engine replays a program to answer a prompt, so the
+      // transcript is rebuilt from the start on each attempt.
+      beginOutput();
+      return;
+    }
     if (record.event === 'stdout') {
       appendText(record.text);
       return;
@@ -476,7 +468,6 @@
 
     flushQueued();            // never lose the last chunk behind the result
     current.settled = true;
-    if (current.stream) current.stream.close();
     removeCaret();
 
     if (record.error) {
@@ -510,16 +501,10 @@
     if (!current) return;
     session = null;
     current.settled = true;
-    if (current.stream) current.stream.close();
     removeCaret();
     el.stopButton.hidden = true;
     el.output.classList.remove('is-waiting');
-    // Best effort: the server also ends a run when its stream drops.
-    fetch('/api/stop', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ session: current.id })
-    }).catch(function () {});
+    if (current.handle && current.handle.stop) current.handle.stop();
   }
 
   function stopFromButton() {
@@ -740,19 +725,12 @@
     el.output.classList.remove('is-waiting');
     setStatus('running', 'Running...');
 
-    fetch('/api/input', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ session: current.id, text: text })
-    })
-      .then(toJson)
-      .catch(function () {
-        if (current.settled) return;
-        current.settled = true;
-        if (current.stream) current.stream.close();
-        renderDisconnected();
-        finishRun('error', 'Error');
-      });
+    current.handle.sendInput(text).catch(function () {
+      if (current.settled) return;
+      current.settled = true;
+      renderDisconnected();
+      finishRun('error', 'Error');
+    });
   }
 
   function removeCaret() {
@@ -797,7 +775,10 @@
     box.className = 'output-error';
     box.appendChild(node('div', 'error-label', 'Error'));
     box.appendChild(node('div', 'error-message', 'The playground server is not responding.'));
-    box.appendChild(node('div', 'error-detail', 'Start it again with: python playground/server.py'));
+    box.appendChild(node('div', 'error-detail',
+      engine && engine.kind === 'browser'
+        ? 'The in-browser engine could not start. Check the connection and reload.'
+        : 'Start it again with: python playground/server.py'));
     el.output.appendChild(box);
     playErrorSound();
   }
