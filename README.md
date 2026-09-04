@@ -47,7 +47,7 @@ For Software:
   - [Pyodide](https://pyodide.org/) - CPython on WebAssembly, so the compiler runs in the browser
   - [Monaco Editor](https://microsoft.github.io/monaco-editor/) - the playground's code editor
   - `reportlab` and `Pillow` - used only to build the PDF guide and the favicon, never at runtime
-- **Tools used:** Git, Vercel (static hosting), unittest (250 tests)
+- **Tools used:** Git, Vercel (static hosting), unittest (252 tests)
 
 > **Documentation:** [`docs/WPP_Documentation.pdf`](docs/WPP_Documentation.pdf)
 > is a 7-page technical write-up - how the compiler is built, how errors are
