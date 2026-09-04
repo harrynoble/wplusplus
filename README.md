@@ -4,15 +4,16 @@
 
 # W++ 🎯
 
+**Live playground: [wplusplus.vercel.app](https://wplusplus.vercel.app/)**
+
 
 ## Basic Details
-### Team Name: [Name]
+### Team Name: The Mavericks
 
 
 ### Team Members
-- Team Lead: [Name] - [College]
-- Member 2: [Name] - [College]
-- Member 3: [Name] - [College]
+- Member 1: Harry Noble - Muthoot Institute of Technology & Science, Kochi
+- Member 2: Jinoy Fredy - Muthoot Institute of Technology & Science, Kochi
 
 ### Project Description
 W++ is a programming language where every keyword is Gen Z slang. You write
@@ -82,6 +83,9 @@ python wpp.py --emit   examples/hello.wpp   # the Python it generated
 python -m unittest discover -s tests -t .
 ```
 
+Or skip all of that and use the deployed playground:
+**[wplusplus.vercel.app](https://wplusplus.vercel.app/)**
+
 Here is a complete W++ program:
 
 ```wpp
@@ -111,14 +115,14 @@ And the nineteen keywords, in full:
 For Software:
 
 # Screenshots (Add at least 3)
-![Screenshot1](Add screenshot 1 here with proper name)
-*The playground running FizzBuzz - editor on the left, integrated output on the right*
+![The playground running FizzBuzz](docs/images/screenshot1-fizzbuzz.png)
+*The playground running FizzBuzz - editor on the left with W++ syntax highlighting, integrated output on the right. `spam`, `bet`, `plotwist` and `nah` are doing the work of `for`, `if`, `elif` and `else`.*
 
-![Screenshot2](Add screenshot 2 here with proper name)
-*The Skill Issue Protocol: a ZeroDivisionError reported against the W++ line that caused it, with the failing line marked in the editor*
+![A Skill Issue reported on the W++ line](docs/images/screenshot2-skill-issue.png)
+*The Skill Issue Protocol. The first call printed a class average; the second divided by zero. The error names the W++ line that caused it - line 5 - quotes that line back, and marks it in the editor. It reports where you wrote the mistake, not where the generated Python failed.*
 
-![Screenshot3](Add screenshot 3 here with proper name)
-*Interactive input - when a program calls `dm()`, you type your answer straight into the output panel*
+![Typing input straight into the output panel](docs/images/screenshot3-interactive-input.png)
+*Interactive input. When a program calls `dm()`, the prompt appears in the output panel and you type your answer straight after it, exactly like a terminal. The status reads "Waiting for input" and a Stop button appears while the program is paused.*
 
 # Diagrams
 ![Workflow](docs/images/architecture.png)
@@ -160,28 +164,23 @@ Program  @1:0
 ```
 
 The same compiler runs in two places. Locally, `playground/server.py` executes
-each program in a child process. Deployed, the identical `wpplang` package runs
-under Pyodide inside the visitor's own browser - which is why the playground can
-be hosted as static files with no backend, and why it is safe to make public.
+each program in a child process. Deployed at
+[wplusplus.vercel.app](https://wplusplus.vercel.app/), the identical `wpplang`
+package runs under Pyodide inside the visitor's own browser - which is why the
+playground can be hosted as static files with no backend, and why it is safe to
+make public.
 
 For Hardware:
 
 Not applicable - W++ is software only, so there is no circuit, schematic or build.
 
-### Project Demo
-# Video
-[Add your demo video link here]
-*Shows a W++ program being written in the playground and run, a deliberate mistake producing a Skill Issue on the right line, and `--ast` printing the syntax tree to prove the language is really parsed.*
+## Credits
 
-# Additional Demos
-- **The learning guide:** [`docs/WPP_Guide.pdf`](docs/WPP_Guide.pdf) - 57 pages covering every keyword, all the Python that comes with it, and nine complete programs. Every example in it was executed by the compiler while the PDF was being written, so the printed output is what actually came back.
-- **The test suite:** `python -m unittest discover -s tests -t .` - 250 tests, including one that checks the new compiler agrees with the regex translator it replaced on every program in the repository.
-- **The reference:** [`docs/REFERENCE.md`](docs/REFERENCE.md) - the full technical documentation this README summarises.
-
-## Team Contributions
-- [Name 1]: [Specific contributions]
-- [Name 2]: [Specific contributions]
-- [Name 3]: [Specific contributions]
+Built with the help of AI assistants. We used **Claude**, **ChatGPT** and
+**Gemini** across the project - for designing the language, working through the
+compiler architecture, writing and reviewing code, generating documentation, and
+debugging. The keyword dictionary, the Skill Issue Protocol wording and the
+design decisions are ours; the AI tools helped us build and refine them.
 
 ---
 Made with ❤️ at TinkerHub Useless Projects 
