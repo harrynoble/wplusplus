@@ -20,11 +20,20 @@ so it cannot quietly go stale.
 
 import json
 import os
+import shutil
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-TARGET = os.path.join(ROOT, "playground", "static", "wpp-sources.json")
+STATIC = os.path.join(ROOT, "playground", "static")
+TARGET = os.path.join(STATIC, "wpp-sources.json")
+
+# The error sound lives at the repository root, where the CLI and the local
+# server read it from.  A static host only serves playground/static, so it has
+# to be copied in - otherwise the deployed page asks for a file that is not
+# there and fails silently, which is exactly what happened.
+ERROR_SOUND = os.path.join(ROOT, "audio", "fah.mp3")
+SOUND_COPY = os.path.join(STATIC, "audio", "fah.mp3")
 
 # The modules the browser needs.  `sound.py` is left out on purpose: it plays
 # audio through the operating system and nothing on the browser path imports it.
@@ -93,6 +102,22 @@ def build():
     }
 
 
+def copy_error_sound():
+    """Put the error sound where a static host can serve it.
+
+    The CLI and the local server read audio/fah.mp3 from the repository root,
+    but a static host only serves playground/static - so without this copy the
+    deployed page requests a file that is not there and stays silent, which is
+    exactly what happened on the first deployment.
+    """
+    if not os.path.isfile(ERROR_SOUND):
+        print("  no audio/fah.mp3 to copy; the deployed page will stay quiet")
+        return None
+    os.makedirs(os.path.dirname(SOUND_COPY), exist_ok=True)
+    shutil.copyfile(ERROR_SOUND, SOUND_COPY)
+    return SOUND_COPY
+
+
 def main():
     bundle = build()
     text = json.dumps(bundle, indent=1, sort_keys=True) + "\n"
@@ -103,6 +128,11 @@ def main():
     print("  %d modules, %d examples, %.0f KB"
           % (len(bundle["modules"]), len(bundle["examples"]),
              len(text.encode("utf-8")) / 1024.0))
+
+    copied = copy_error_sound()
+    if copied:
+        print("copied %s (%.0f KB)"
+              % (copied, os.path.getsize(copied) / 1024.0))
     return 0
 
 

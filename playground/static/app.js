@@ -534,7 +534,8 @@
     applySoundButton();
 
     try {
-      sound = new Audio('/audio/fah.mp3');
+      // Relative, so the page works wherever it is served from.
+      sound = new Audio('audio/fah.mp3');
       sound.preload = 'auto';
     } catch (error) {
       sound = null;   // no audio support: the toggle simply does nothing

@@ -200,9 +200,10 @@ class StaticTests(ApiTestCase):
 
         with urllib.request.urlopen(self.base + "/app.js", timeout=30) as response:
             script = response.read().decode("utf-8")
-        # The sound plays on an error, and the choice is remembered.
+        # The sound plays on an error, and the choice is remembered. The path
+        # is relative so the page works from a subpath as well as the root.
         self.assertIn("playErrorSound", script)
-        self.assertIn("/audio/fah.mp3", script)
+        self.assertIn("audio/fah.mp3", script)
         self.assertIn("localStorage", script)
 
     def test_no_stdin_box_remains(self):

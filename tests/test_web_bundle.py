@@ -124,6 +124,40 @@ class StaticSiteTests(unittest.TestCase):
             with self.subTest(asset=name):
                 self.assertTrue(os.path.isfile(os.path.join(STATIC, name)), name)
 
+    def test_the_error_sound_is_in_the_static_deploy(self):
+        """A static host only serves playground/static.
+
+        The local server reads audio/fah.mp3 from the repository root through a
+        route of its own, so a missing copy here is invisible locally and the
+        deployed page simply stays quiet - which is how it shipped broken once.
+        """
+        import hashlib
+
+        source = os.path.join(ROOT, "audio", "fah.mp3")
+        copied = os.path.join(STATIC, "audio", "fah.mp3")
+
+        self.assertTrue(os.path.isfile(source), "audio/fah.mp3 is missing")
+        self.assertTrue(
+            os.path.isfile(copied),
+            "playground/static/audio/fah.mp3 is missing; the deployed page "
+            "would have no sound. Run: python tools/build_web_bundle.py")
+
+        with open(source, "rb") as handle:
+            expected = hashlib.sha1(handle.read()).hexdigest()
+        with open(copied, "rb") as handle:
+            actual = hashlib.sha1(handle.read()).hexdigest()
+        self.assertEqual(
+            actual, expected,
+            "the copy has drifted from audio/fah.mp3; "
+            "run: python tools/build_web_bundle.py")
+
+    def test_the_page_asks_for_the_sound_by_a_relative_path(self):
+        """So it works from a subpath, not only from the site root."""
+        with open(os.path.join(STATIC, "app.js"), encoding="utf-8") as handle:
+            script = handle.read()
+        self.assertIn("new Audio('audio/fah.mp3')", script)
+        self.assertNotIn("new Audio('/audio/fah.mp3')", script)
+
     def test_the_page_loads_the_engine_before_the_app(self):
         with open(os.path.join(STATIC, "index.html"), encoding="utf-8") as handle:
             page = handle.read()
