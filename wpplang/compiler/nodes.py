@@ -38,6 +38,10 @@ class Node:
                     children.append((name, list(value)))
                 elif value:
                     details.append("{}={!r}".format(name, list(value)))
+            elif value is False:
+                # A flag that is off says nothing; leaving `is_async=False` and
+                # friends out keeps a dump readable.
+                continue
             elif value is not None:
                 details.append("{}={!r}".format(name, value))
 
