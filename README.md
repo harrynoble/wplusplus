@@ -49,9 +49,13 @@ For Software:
   - `reportlab` and `Pillow` - used only to build the PDF guide and the favicon, never at runtime
 - **Tools used:** Git, Vercel (static hosting), unittest (250 tests)
 
-> Full technical documentation - architecture, every keyword, the Skill Issue
-> Protocol, deployment and known limitations - is in
-> [`docs/REFERENCE.md`](docs/REFERENCE.md).
+> **Documentation:** [`docs/WPP_Documentation.pdf`](docs/WPP_Documentation.pdf)
+> is a 7-page technical write-up - how the compiler is built, how errors are
+> reported against your own source, how the playground runs both locally and in
+> the browser, and how it is tested.
+> [`docs/REFERENCE.md`](docs/REFERENCE.md) is the full reference: architecture,
+> every keyword, the Skill Issue Protocol, deployment and known limitations.
+> [`docs/WPP_Guide.pdf`](docs/WPP_Guide.pdf) teaches the language itself.
 
 For Hardware:
 - Not applicable - W++ is software only.
